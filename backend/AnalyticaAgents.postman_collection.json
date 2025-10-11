@@ -1,0 +1,111 @@
+{
+  "info": {
+    "name": "Analytica Agents - Local",
+    "_postman_id": "6b8a1e2c-7a7f-4b0a-9e9f-analytica-local",
+    "description": "Collection para testar o FastAPI local com endpoints de insights e agente.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://127.0.0.1:8000" }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/healthz"
+      }
+    },
+    {
+      "name": "Home",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/"
+      }
+    },
+    {
+      "name": "Occupancy Index (onde está lotado)",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/insights/occupancy-index?ano=2024&top=50",
+          "host": ["{{baseUrl}}"],
+          "path": ["insights","occupancy-index"],
+          "query": [
+            { "key": "ano", "value": "2024" },
+            { "key": "top", "value": "50" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Wait Time Series (por CNES)",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/insights/wait-time-series?cnes=2269554&ano=2024",
+          "host": ["{{baseUrl}}"],
+          "path": ["insights","wait-time-series"],
+          "query": [
+            { "key": "cnes", "value": "2269554" },
+            { "key": "ano", "value": "2024" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Professional Load",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/insights/professional-load?ano=2024&top=100",
+          "host": ["{{baseUrl}}"],
+          "path": ["insights","professional-load"],
+          "query": [
+            { "key": "ano", "value": "2024" },
+            { "key": "top", "value": "100" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Supply vs Demand",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/insights/supply-demand?ano=2024&top=200",
+          "host": ["{{baseUrl}}"],
+          "path": ["insights","supply-demand"],
+          "query": [
+            { "key": "ano", "value": "2024" },
+            { "key": "top", "value": "200" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Agent - Onde está lotado (NL→dados)",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"pergunta\": \"Onde está mais lotado este ano?\",\n  \"ano\": 2024,\n  \"top\": 20\n}"
+        },
+        "url": "{{baseUrl}}/agent/ask"
+      }
+    },
+    {
+      "name": "Agent - Série de espera (NL→dados)",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"pergunta\": \"Qual a fila de espera mensal?\",\n  \"ano\": 2024,\n  \"cnes\": \"2269554\"\n}"
+        },
+        "url": "{{baseUrl}}/agent/ask"
+      }
+    }
+  ]
+}
