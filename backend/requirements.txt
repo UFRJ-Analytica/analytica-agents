@@ -1,8 +1,7 @@
-google-cloud
-google-cloud-bigquery
 pandas
 fastapi[standard]
-langgraph
 uvicorn
 python-dotenv
 python-multipart
+google-adk
+pyarrow
