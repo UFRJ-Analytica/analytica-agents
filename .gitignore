@@ -94,7 +94,7 @@ junit.xml
 backend/__pycache__/
 backend/.pytest_cache/
 backend/*.sqlite3
-
+backend/dados
 # Frontend
 frontend/.next/
 frontend/out/
