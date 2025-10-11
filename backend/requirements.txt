@@ -7,3 +7,6 @@ langgraph
 uvicorn
 python-dotenv
 python-multipart
+python-dateutil
+pyarrow
+s3fs
