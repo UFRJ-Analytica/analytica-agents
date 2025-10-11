@@ -1,5 +1,6 @@
 google-cloud
 google-cloud-bigquery
+google-adk
 pandas
 fastapi[standard]
 langgraph
