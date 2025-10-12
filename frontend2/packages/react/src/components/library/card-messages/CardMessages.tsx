@@ -1,11 +1,8 @@
 import React, { useState, useCallback, useEffect } from 'react';
 
-import TextBox from 'devextreme-react/text-box';
 import TextArea from 'devextreme-react/text-area';
 import Toolbar, { Item } from 'devextreme-react/toolbar';
 import Button from 'devextreme-react/button';
-import FileUploder from 'devextreme-react/file-uploader';
-import Validator, { RequiredRule } from 'devextreme-react/validator';
 import ValidationGroup from 'devextreme-react/validation-group';
 
 import { formatDate } from 'devextreme/localization';
@@ -23,7 +20,6 @@ const Card = ({ data, user, manager }: { data: Message; user: string, manager: s
     <div className='message dx-card'>
       <div className='message-title'>
         <div>
-          <div className='subject'>{data.subject}</div>
           <div>
             {formatDate(new Date(data.date), 'MM/dd/yyyy')} - {data.manager}
           </div>
@@ -41,7 +37,6 @@ export const CardMessages = ({ items, user }: {
   items?: Messages; user?: string;
 }) => {
   const [messages, setMessages] = useState(items);
-  const [title, setTitle] = useState('');
   const [message, setMessage] = useState('');
 
   useEffect(() => {
@@ -52,13 +47,9 @@ export const CardMessages = ({ items, user }: {
     if (!e.validationGroup.validate().isValid || !messages || !user) {
       return;
     }
-    setMessages([...messages, { manager: user, date: new Date(), text: message, subject: title }]);
+    setMessages([...messages, { manager: user, date: new Date(), text: message }]);
     e.validationGroup.reset();
-  }, [message, title, messages, user]);
-
-  const onTitleChanged = useCallback((value) => {
-    setTitle(value);
-  }, []);
+  }, [message, messages, user]);
 
   const onMessageChanged = useCallback((value) => {
     setMessage(value);
@@ -67,23 +58,16 @@ export const CardMessages = ({ items, user }: {
   return (
     <ValidationGroup>
       <div className='messages'>
+        <div className='messages-content'>
+          <div className='message-list'>
+            {user && messages?.map((message, index) => (
+              <Card key={index} data={message} user={messages[1].manager} manager={messages[0].manager} />
+            ))}
+          </div>
+        </div>
         <div className='input-messages'>
-          <TextBox label='Subject' stylingMode='filled' value={title} valueChangeEvent='keyup' onValueChange={onTitleChanged}>
-            <Validator>
-              <RequiredRule />
-            </Validator>
-          </TextBox>
-          <TextArea label='Message' height={150} stylingMode='filled' value={message} valueChangeEvent='keyup' onValueChange={onMessageChanged}>
-            <Validator>
-              <RequiredRule />
-            </Validator>
-          </TextArea>
+          <TextArea height={150} stylingMode='filled' value={message} valueChangeEvent='keyup' onValueChange={onMessageChanged} />
           <Toolbar>
-            <Item
-              location='before'
-            >
-              <FileUploder className='file-uploader' labelText='' selectButtonText='Attach file' />
-            </Item>
             <Item
               location='after'
               widget='dxButton'
@@ -95,13 +79,6 @@ export const CardMessages = ({ items, user }: {
               }}
             />
           </Toolbar>
-        </div>
-        <div className='messages-content'>
-          <div className='message-list'>
-            {user && messages?.map((message, index) => (
-              <Card key={index} data={message} user={messages[1].manager} manager={messages[0].manager} />
-            ))}
-          </div>
         </div>
       </div>
     </ValidationGroup>

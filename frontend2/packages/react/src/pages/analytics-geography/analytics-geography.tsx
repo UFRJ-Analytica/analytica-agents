@@ -1,20 +1,20 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Item } from 'devextreme-react/toolbar';
-import Tabs from 'devextreme-react/tabs';
 import * as mapsData from 'devextreme-dist/js/vectormap-data/usa.js';
 import LoadPanel from 'devextreme-react/load-panel';
 import ScrollView from 'devextreme-react/scroll-view';
-import { TABS } from '../../shared/constants';
 import { formatDate } from 'devextreme/localization';
+import TabPanel, { Item as TabPanelItem } from 'devextreme-react/tab-panel';
+import { ContactForm, ContactCards } from '../../components';
+import { Contact } from '../../types/crm-contact';
+import { useSearchParams } from 'react-router-dom';
 
 import { RangeSelectorTypes } from 'devextreme-react/range-selector';
-import { DropDownButtonTypes } from 'devextreme-react/drop-down-button';
 import { getSalesByCategory, getSales, getSalesByOrderDate } from 'dx-template-gallery-data';
 import { getSalesByStateAndCity, calcSalesByState } from 'dx-template-gallery-data';
 
 import { ToolbarAnalytics, SalesMapCard, RevenueAnalysisByStatesCard, RevenueSnapshotByStatesCard, SalesPerformanceCard } from '../../components';
 import { SaleByStateAndCity, SaleByState, Sale, SaleOrOpportunityByCategory } from '../../types/analytics';
-import { useScreenSize } from '../../utils/media-query';
 import {
   ANALYTICS_PERIODS,
   DEFAULT_ANALYTICS_PERIOD_KEY,
@@ -23,47 +23,49 @@ import {
 
 import './analytics-geography.scss';
 import { VariablesCard } from '../../components/utils/variables-card/VariablesCard';
+import { DropDownButtonTypes } from 'devextreme-react/drop-down-button';
 
-const formatDateRange = (dateRange: Date[]) => dateRange.map((date) => formatDate(date, 'yyyy-MM-dd'));
-const createMapCoords = (coords: string) => coords.split(', ').map(parseFloat);
-
-const getSalesByStateMarkers = (salesByState) => ({
-  type: 'StateCollection',
-  features: salesByState.map((item) => ({
-    type: 'State',
-    geometry: {
-      type: 'Point',
-      coordinates: createMapCoords(item.stateCoords),
-    },
-    properties: {
-      text: item.stateName,
-      value: item.total,
-      tooltip: `<b>${item.stateName}</b>\n${item.total}K`,
-    },
-  })),
-});
+import {
+  getContact,
+  getContactMessages,
+} from 'dx-template-gallery-data';
 
 export const AnalyticsGeography = () => {
-  const onTab2Click = useCallback((e) => {
-    const { index } = TABS[e.addedItems[0]];
-    setTabIndex2(index);
-  }, []);
-
-  useEffect(() => {
-    setTabsWidth2(isXSmall ? 150 : 'auto');
-  }, []);
-  const [tabsWidth2, setTabsWidth2] = useState<number | string>('auto');
-  const [tabIndex2, setTabIndex2] = useState(TABS['Historico'].index);
-
-  const defaultDateRange = ANALYTICS_PERIODS[DEFAULT_ANALYTICS_PERIOD_KEY].period.split('/').map((d) => new Date(d));
-  const customDateRange = ANALYTICS_PERIODS[CUSTOM_ANALYTICS_PERIOD_KEY].period.split('/').map((d) => new Date(d));
+  const getSalesByStateMarkers = (salesByState) => ({
+    type: 'StateCollection',
+    features: salesByState.map((item) => ({
+      type: 'State',
+      geometry: {
+        type: 'Point',
+        coordinates: createMapCoords(item.stateCoords),
+      },
+      properties: {
+        text: item.stateName,
+        value: item.total,
+        tooltip: `<b>${item.stateName}</b>\n${item.total}K`,
+      },
+    })),
+  });
   const groupByPeriods = ['Day', 'Month'];
-  const items2 = Object.keys(TABS);
+  const [salesByDateAndCategory, setSalesByDateAndCategory] = useState<Sale[]>([]);
+  const formatDateRange = (dateRange: Date[]) => dateRange.map((date) => formatDate(date, 'yyyy-MM-dd'));
+  const createMapCoords = (coords: string) => coords.split(', ').map(parseFloat);
+  const [groupByPeriod, setGroupByPeriod] = useState(groupByPeriods[1]);
+  const onPeriodChanged = useCallback((e: DropDownButtonTypes.SelectionChangedEvent) => {
+    setGroupByPeriod(e.item);
+  }, []);
+
+  const [dateRange] = useState(ANALYTICS_PERIODS[DEFAULT_ANALYTICS_PERIOD_KEY].period.split('/'));
+
+  const defaultDateRange = ANALYTICS_PERIODS[DEFAULT_ANALYTICS_PERIOD_KEY].period.split('/').map((d) => {
+    console.log(new Date(d));
+    return new Date(d);
+  });
+
+  const customDateRange = ANALYTICS_PERIODS[CUSTOM_ANALYTICS_PERIOD_KEY].period.split('/').map((d) => new Date(d));
   const [sales, setSales] = useState<Sale[]>([]);
   const [salesByCategory, setSalesByCategory] = useState<SaleOrOpportunityByCategory[]>([]);
-  const [salesByDateAndCategory, setSalesByDateAndCategory] = useState<Sale[]>([]);
   const [dateRange2, setDateRange2] = useState(defaultDateRange);
-  const [groupByPeriod, setGroupByPeriod] = useState(groupByPeriods[1]);
   console.log(sales);
   console.log(salesByCategory);
 
@@ -71,12 +73,6 @@ export const AnalyticsGeography = () => {
   const [salesByState, setSalesByState] = useState<SaleByState[]>([]);
   const [salesByStateMarkers, setSalesByStateMarkers] = useState({});
   const [isLoading, setIsLoading] = useState(true);
-  const { isXSmall } = useScreenSize();
-
-  const onPeriodChanged = useCallback((e: DropDownButtonTypes.SelectionChangedEvent) => {
-    setGroupByPeriod(e.item);
-    setIsLoading(true);
-  }, []);
 
   const onRangeChanged = useCallback((e: RangeSelectorTypes.ValueChangedEvent) => {
     const [startDate, endDate] = e.value;
@@ -101,7 +97,7 @@ export const AnalyticsGeography = () => {
   }, [groupByPeriod]);
 
   useEffect(() => {
-    getSalesByStateAndCity(...dateRange2).then((data) => {
+    getSalesByStateAndCity(...dateRange).then((data) => {
       const salesByStateResult = calcSalesByState(data);
 
       setSalesByStateAndCity(data);
@@ -119,6 +115,31 @@ export const AnalyticsGeography = () => {
       })
       .catch((error) => console.log(error));
   }, [dateRange2]);
+
+  const [data, setData] = useState<Contact>();
+  const [messages, setMessages] = useState([]);
+  const [searchParams] = useSearchParams();
+  const id = parseInt(searchParams.get('id') || '', 10);
+  const DEFAULT_CONTACT_ID = 12;
+  const contactId = id || DEFAULT_CONTACT_ID;
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = useCallback(() => {
+    Promise.all([
+      getContact(contactId)
+        .then((data) => {
+          setData(data);
+        }),
+      getContactMessages(contactId)
+        .then((data) => {
+          setMessages(data);
+        })
+    ]).then(() => { setIsLoading(false); }).catch((error) => console.log(error));
+  }, [contactId]);
+
   return (
     <ScrollView className='view-wrapper-scroll'>
       <ToolbarAnalytics
@@ -138,32 +159,46 @@ export const AnalyticsGeography = () => {
           additionalToolbarContent={
             <Item
               location='before'
-            >
-              <Tabs
-                width={tabsWidth2}
-                scrollByContent
-                showNavButtons={false}
-                dataSource={items2}
-                selectedIndex={tabIndex2}
-                onSelectionChanged={onTab2Click}
-              />
-            </Item>
+            />
           }
         >
-          <div className='cards normal'>
-            <RevenueAnalysisByStatesCard datasource={salesByStateAndCity} />
-            <RevenueSnapshotByStatesCard datasource={salesByState} />
-          </div>
-
-          <div className='cards wide'>
-            <SalesPerformanceCard
-              datasource={salesByDateAndCategory}
-              periods={groupByPeriods}
-              selectedPeriod={groupByPeriod}
-              onPeriodChanged={onPeriodChanged}
-              range={dateRange2}
-            />
-          </div>
+          <TabPanel
+            showNavButtons
+            focusStateEnabled={false}
+            deferRendering={false}
+          >
+            <TabPanelItem title='Historico'>
+              <div className='cards normal'>
+                <RevenueAnalysisByStatesCard datasource={salesByStateAndCity} />
+                <RevenueSnapshotByStatesCard datasource={salesByState} />
+              </div>
+              <div className='cards wide'>
+                <SalesPerformanceCard
+                  datasource={salesByDateAndCategory}
+                  periods={groupByPeriods}
+                  selectedPeriod={groupByPeriod}
+                  onPeriodChanged={onPeriodChanged}
+                  range={dateRange2}
+                />
+              </div>
+            </TabPanelItem>
+            <TabPanelItem title='Susana IA'>
+              <div className='view-wrapper view-wrapper-contact-details'>
+                <div className='panels'>
+                  <div className='left'>
+                    <ContactForm
+                      data={data}
+                      isLoading={isLoading}
+                    />
+                  </div>
+                  <div className='right'>
+                    <ContactCards
+                      messages={messages} />
+                  </div>
+                </div>
+              </div>
+            </TabPanelItem>
+          </TabPanel>
         </ToolbarAnalytics>
       </div>
       <LoadPanel container='.content' visible={isLoading} position={{ of: '.layout-body' }} />

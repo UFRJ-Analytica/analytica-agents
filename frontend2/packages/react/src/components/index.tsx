@@ -3,7 +3,6 @@ export { AppFooter } from './library/app-footer/AppFooter';
 export { CardAuth } from './library/card-auth/CardAuth';
 export { ResetPasswordForm } from './library/reset-password-form/ResetPasswordForm';
 export { ChangePasswordForm } from './library/change-password-form/ChangePasswordForm';
-export { SideNavigationMenu } from './library/side-navigation-menu/SideNavigationMenu';
 export { CardActivities } from './library/card-activities/CardActivities';
 export { CardNotes } from './library/card-notes/CardNotes';
 export { CardMessages } from './library/card-messages/CardMessages';
