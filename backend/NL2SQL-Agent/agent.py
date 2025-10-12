@@ -9,7 +9,7 @@ import pandas as pd
 # Cria a tool
 def execute_query(sql_query: str):
         """
-        Executa uma query SQL no banco e retorna o resultado como JSON.
+        Executa uma query SQL no banco e retorna o resultado em um dicionário.
 
         Args:
             sql_query (str): A consulta SQL a ser executada.
