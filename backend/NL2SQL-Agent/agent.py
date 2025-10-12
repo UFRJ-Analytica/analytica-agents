@@ -1,9 +1,54 @@
-import os
+from google.adk.agents.llm_agent import Agent
+from google.adk.tools import FunctionTool
 
-from google.adk.agents import Agent
-from google.adk.tools.mcp_tool.mcp_toolset import MCPToolset
-from google.adk.tools.mcp_tool.mcp_session_manager import StdioConnectionParams
-from mcp import StdioServerParameters
+from psycopg2.extras import RealDictCursor
+import psycopg2
+
+import pandas as pd
+
+# Cria a tool
+def execute_query(sql_query: str):
+        """
+        Executa uma query SQL no banco e retorna o resultado como JSON.
+
+        Args:
+            sql_query (str): A consulta SQL a ser executada.
+        Returns:
+            dict: Um dicionário contendo o status e o resultado ou mensagem de erro.
+        """
+        try:
+            # Conexão ao banco
+            conn = psycopg2.connect(
+                host="grupo3-agent-db.c7bh93xirm1i.us-east-1.rds.amazonaws.com",
+                dbname="postgres",
+                user="postgres",
+                password="12345678",
+                port=5432
+            )
+            cursor = conn.cursor(cursor_factory=RealDictCursor)
+
+            # Execução da query
+            cursor.execute(sql_query)
+            
+            # Se for SELECT, retorna resultados
+            if sql_query.strip().lower().startswith("select"):
+                result = cursor.fetchall()
+                df = pd.DataFrame(result)
+                output = df.to_dict(orient="records")
+            else:
+                conn.commit()
+                output = {"message": "Query executada com sucesso."}
+
+            # Fecha a conexão
+            cursor.close()
+            conn.close()
+
+            return {"status": "success", "result": output}
+
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
+
+
 
 TABLES = """
 name: solicitacoes
@@ -565,43 +610,57 @@ Entre os atributos citados acima, o unidade_id_cnes / unidade_solicitante_id_cne
 
 root_agent = Agent(
     model='gemini-2.5-flash',
-    name='SQLAgent',
-    description='Você é um agente que consulta dados de saúde carregados e combinados. Use as ferramentas disponíveis para responder às perguntas do usuário com base nos dados.',
-    instruction='Você tem acesso a ferramentas que permitem carregar, combinar e consultar dados do Datalake de Saúde. ' \
-                'Use essas ferramentas para responder às perguntas do usuário com base nos dados disponíveis.'\
-                'Se o usuário fizer uma pergunta que não pode ser respondida com os dados, informe educadamente que você não tem essa informação.'\
-                'Você pode usar a função load_single_parquet_files para carregar apenas um arquivo parquet específico, basta passar o nome do arquivo como parâmetro.'\
-                'Você pode usar a função query_parquet_tool para consultar TODOS os dados combinados.'\
-                'Seu fluxo de execução deve ser a seguinte:'\
-                '1. Analise as colunas disponíveis nos arquivos carregados'\
-                '2. Entenda quais colunas devem ser utilizadas para fazer consulta nestes arquivos baseado no prompt do usuário.'\
-                '3. Use a ferramenta apropriada para consultar os dados e obter as informações solicitadas pelo usuário.'\
-                '4. Forneça a resposta ao usuário com base nos dados obtidos.'\
-                'SISREG é o sistema de regulação de acesso a procedimentos de saúde no município do Rio de Janeiro.'\
-                f'{JUNCAO_TABELAS}'\
-                'As tabelas disponíveis estão estruturadas da seguinte forma:'\
-                'name: <nome_da_tabela>'\
-                '   description: <descrição_da_tabela>'\
-                '   columns:'\
-                '       - name: <nome_da_coluna>'\
-                '         description: <descrição_da_coluna>'\
-                '# Tabelas disponíveis:' + TABLES 
-                ,
-    tools=[
-        MCPToolset(
-            connection_params=StdioConnectionParams(
-                server_params=StdioServerParameters(
-                    command="postgres-mcp",
-                    args=[
-                        "--access-mode=unrestricted",
-                        "--transport=sse"
-                    ],
-                    env={
-                        "DATABASE_URI": "postgresql://postgres:12345678@grupo3-agent-db.c7bh93xirm1i.us-east-1.rds.amazonaws.com:5432/grupo3-agent-db"
-                    }
-                )
+    name='NL2SQL',
+    description='An agent that translates natural language to SQL queries',
+    instruction=f"""
+                Você é um agente especializado em traduzir solicitações em linguagem natural para consultas SQL PostgreSQL corretas, otimizadas e legíveis. 
+                Seu papel é analisar o texto recebido e gerar **apenas** uma consulta SQL funcional, seguindo o raciocínio abaixo antes de criar a query.
+
+                ---
+
+                ## Etapas obrigatórias de raciocínio (internas)
+
+                1. **Identificar as colunas e funções de agregação**
+                - Determine quais colunas são mencionadas ou implícitas no pedido.
+                - Se o usuário pedir médias, somas, contagens, máximos ou mínimos, use a função de agregação apropriada:
+                    - AVG() → média
+                    - SUM() → soma
+                    - COUNT() → contagem
+                    - MAX() / MIN() → valor máximo / mínimo
+                - Se não houver agregação, apenas selecione as colunas necessárias.
+
+                2. **Determinar as tabelas e relacionamentos (JOINs)**
+                - Verifique de quais tabelas vêm as colunas.
+                - Se todas estiverem na mesma tabela, **não use JOIN**.
+                - Caso contrário, determine:
+                    - Quais tabelas devem ser unidas.
+                    - Qual coluna deve ser usada na condição `ON`.
+                    - Use `INNER JOIN` por padrão, a menos que o contexto indique outro tipo.
+
+                3. **Definir filtros (cláusula WHERE)**
+                - Se houver condições de filtragem (ex: “apenas escolas públicas”, “ano = 2024”), adicione cláusula WHERE.
+                - Use operadores SQL adequados: `=`, `>`, `<`, `LIKE`, `IN`, `BETWEEN`, etc.
+
+                4. **Agrupamentos (GROUP BY)**
+                - Caso exista alguma função de agregação e a consulta precise agrupar resultados, adicione `GROUP BY` com as colunas não agregadas.
+                - Exemplo: “média por escola” → `GROUP BY escola`.
+
+                5. **Ordenação e Limite (ORDER BY / LIMIT)**
+                - Se o pedido contiver ordenação (“maiores valores”, “mais recentes”, etc.), adicione `ORDER BY` e a direção (`ASC` ou `DESC`).
+                - Se o pedido contiver limite (“os 10 primeiros”), use `LIMIT`.
+
+                ---
+
+                Após seguir estas etapas e gerar a consulta SQL correta, use a execute_query tool para executar a consulta e obter os resultados.
+                Caso ocorra algum erro apenas diga ao usuário que houve um erro e especifique.
+                            
+                ## Schemas das tabelas disponíveis
+                    {TABLES}
                 
-            )
-        )
-    ],
+                ## Dicas para junção de tabelas
+                    {JUNCAO_TABELAS}
+                """
+                ,
+                tools=[execute_query]
 )
+
