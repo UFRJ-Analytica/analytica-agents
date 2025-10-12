@@ -1,4 +1,19 @@
 services:
+  api:
+    build: ./backend
+    env_file: .env
+    ports:
+      - "${BACKEND_PORT}:${BACKEND_PORT}"
+    environment:
+      - BACKEND_PORT=${BACKEND_PORT}
+      - BACKEND_HOST=${BACKEND_HOST}
+      - DATA_BACKEND=${DATA_BACKEND}
+      - DATA_URI=${DATA_URI}
+      - DATA_FORMAT=${DATA_FORMAT}
+      - AWS_REGION=${AWS_REGION}
+      - AWS_S3_ENDPOINT=${AWS_S3_ENDPOINT}
+
+
   backend:
     build: ./backend
     container_name: analytica-backend

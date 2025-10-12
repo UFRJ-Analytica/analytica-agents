@@ -5,5 +5,8 @@ python-dotenv
 python-multipart
 google-adk
 pyarrow
+
+s3fs
+
 postgres-mcp
 psycopg2-binary

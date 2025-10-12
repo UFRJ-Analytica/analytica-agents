@@ -1,12 +1,13 @@
 import os
 from typing import Optional
-from fastapi import FastAPI, HTTPException, Query, Body
+from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 import pandas as pd
 from dateutil.parser import parse as dtparse
-
-
-DATA_DIR = os.getenv("DATA_DIR", r"C:\Users\gustavo.costa\Documents\analytica-agents\dataset")
+from backend.storage import load_table
+from fastapi.responses import Response
+import json
+from fastapi import Request
 
 # nomes de arquivos
 FN = {
@@ -168,13 +169,22 @@ def _enrich_with_cid(df: pd.DataFrame, col_name: str) -> pd.DataFrame:
 
 
 # ================== FastAPI ===============================
-app = FastAPI(title="Analytica Agents API", version="0.3.0")
-
+app = FastAPI(title="Analytica Agents API", version="0.4.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"], allow_credentials=True,
     allow_methods=["*"], allow_headers=["*"],
 )
+
+
+def maybe_pretty(payload, pretty: bool):
+    if pretty:
+        return Response(
+            content=json.dumps(payload, indent=2, ensure_ascii=False),
+            media_type="application/json; charset=utf-8"
+        )
+    return payload
+
 
 @app.get("/")
 def home():
@@ -190,58 +200,102 @@ def home():
         ]
     }
 
+# -------- GEO: unidades com lat/long (para o MAPA) --------
+@app.get("/geo/units")
+def geo_units(request: Request, ano: int = Query(..., ge=2000, le=2100), pretty: bool = False):
+    import re
+    uh = load_table("unidade_historico").copy()
+
+    # 1) Detecta latitude/longitude por substring (ex.: unidade_latitude / unidade_longitude)
+    def find_col(df, patterns):
+        for c in df.columns:
+            name = c.lower()
+            if any(p in name for p in patterns):
+                return c
+        return None
+
+    lat_col = find_col(uh, ["latitude", "lat_"])  # latitude é suficiente p/ seu caso
+    lon_col = find_col(uh, ["longitude", "long_", "lng"])
+
+    if not lat_col or not lon_col:
+        return {
+            "ano": ano, "rows": 0, "data": [],
+            "detail": "Colunas de coordenadas não encontradas",
+            "columns_available": uh.columns.tolist(),
+            "expected_any_of": {"latitude": ["*latitude*"], "longitude": ["*longitude*"]},
+        }
+
+    # 2) Normaliza tipo numérico
+    uh[lat_col] = pd.to_numeric(uh[lat_col], errors="coerce")
+    uh[lon_col] = pd.to_numeric(uh[lon_col], errors="coerce")
+
+    # 3) Filtro por ano (se existir)
+    if "ano" in uh.columns:
+        if not pd.api.types.is_integer_dtype(uh["ano"]):
+            uh["ano"] = pd.to_numeric(uh["ano"], errors="coerce").astype("Int64")
+        uh = uh[uh["ano"] == ano]
+
+    # 4) Seleciona colunas úteis e renomeia para contrato estável
+    base_cols = ["unidade_id_cnes", "unidade_nome", "bairro", "regiao", "ano", "mes"]
+    have_base = [c for c in base_cols if c in uh.columns]
+
+    df = uh[have_base + [lat_col, lon_col]].dropna(subset=[lat_col, lon_col]).copy()
+    df = df.rename(columns={lat_col: "latitude", lon_col: "longitude"})
+
+    # 5) Se houver série temporal, pega última observação por CNES
+    if "unidade_id_cnes" in df.columns and ("mes" in df.columns or "ano" in df.columns):
+        sort_cols = ["unidade_id_cnes"] + [c for c in ["ano", "mes"] if c in df.columns]
+        df = df.sort_values(sort_cols).groupby("unidade_id_cnes", as_index=False).tail(1)
+
+    result = {"ano": ano, "rows": int(df.shape[0]), "data": df.to_dict(orient="records")}
+    return maybe_pretty(result, pretty)
+
 @app.get("/healthz")
 def healthz():
     return {"status": "ok"}
 
-# -------- 1) Índice de Ocupação / Estresse --------
+# -------- Índice de Ocupação / Estresse --------
 @app.get("/insights/occupancy-index")
 def occupancy_index(ano: int = Query(..., ge=2000, le=2100), top: int = 100):
-    mk = _load_csv("marcacao").copy()
-
-    # filtra por ano da data_solicitacao
+    mk = load_table("marcacao").copy()
+    if "data_solicitacao" not in mk.columns:
+        return {"ano": ano, "rows": 0, "data": []}
     mk = mk[mk["data_solicitacao"].notna()]
     mk = mk[mk["data_solicitacao"].dt.year == ano]
 
-    # normaliza executada (0/1)
-    if "marcacao_executada" in mk.columns:
-        mk["executada"] = mk["marcacao_executada"].fillna(0).astype("Int64")
-    else:
-        mk["executada"] = 0
+    mk["executada"] = mk.get("marcacao_executada", 0)
+    mk["executada"] = mk["executada"].fillna(0).astype("Int64")
 
-    # lead time em dias (somente quando há data_marcacao)
     with_lead = mk[mk["data_marcacao"].notna()].copy()
     with_lead["lead_dias"] = (with_lead["data_marcacao"].dt.date - with_lead["data_solicitacao"].dt.date).apply(lambda x: x.days)
 
-    # agrega por CNES
-    grp_dem = mk.groupby("unidade_solicitante_id_cnes", dropna=False).size().rename("demanda")
+    grp_dem  = mk.groupby("unidade_solicitante_id_cnes", dropna=False).size().rename("demanda")
     grp_exec = mk.groupby("unidade_solicitante_id_cnes", dropna=False)["executada"].sum(min_count=1).rename("executadas")
     grp_lead = with_lead.groupby("unidade_solicitante_id_cnes", dropna=False)["lead_dias"].median().rename("lead_mediana_dias")
 
     df = pd.concat([grp_dem, grp_exec, grp_lead], axis=1).reset_index().rename(columns={"unidade_solicitante_id_cnes": "cnes"})
     df["taxa_execucao"] = (df["executadas"] / df["demanda"]).astype(float)
 
-    # z-scores
     for col in ["lead_mediana_dias", "demanda", "taxa_execucao"]:
         m, s = df[col].mean(skipna=True), df[col].std(skipna=True)
-        if pd.isna(s) or s == 0:
-            df[f"z_{col}"] = 0.0
-        else:
-            df[f"z_{col}"] = (df[col] - m) / s
+        df[f"z_{col}"] = 0.0 if (pd.isna(s) or s == 0) else (df[col] - m) / s
 
     df["stress_index"] = df["z_lead_mediana_dias"] + df["z_demanda"] - df["z_taxa_execucao"]
     df = df.sort_values("stress_index", ascending=False).head(top)
 
     return {"ano": ano, "rows": int(df.shape[0]), "data": df.to_dict(orient="records")}
 
-# -------- 2) Série temporal de espera (por CNES) --------
+# -------- Série temporal de espera --------
 @app.get("/insights/wait-time-series")
 def wait_time_series(cnes: str, ano: int):
-    mk = _load_csv("marcacao").copy()
+    mk = load_table("marcacao").copy()
+    if not {"unidade_solicitante_id_cnes","data_solicitacao","data_marcacao"}.issubset(mk.columns):
+        return {"cnes": cnes, "ano": ano, "data": []}
+
     mk = mk[
         (mk["unidade_solicitante_id_cnes"].astype(str) == str(cnes)) &
         (mk["data_solicitacao"].notna())
-    ].copy()
+    ]
     mk = mk[mk["data_solicitacao"].dt.year == ano]
     mk = mk[mk["data_marcacao"].notna()].copy()
     if mk.empty:
@@ -258,10 +312,10 @@ def wait_time_series(cnes: str, ano: int):
 
     return {"cnes": cnes, "ano": ano, "data": agg.to_dict(orient="records")}
 
-# -------- 3) Carga de profissionais (proxy) --------
+# -------- Carga de profissionais --------
 @app.get("/insights/professional-load")
 def professional_load(ano: int, top: int = 100):
-    ph = _load_csv("profissional_historico").copy()
+    ph = load_table("profissional_historico")
     ph = ph[ph["ano"] == ano]
     if ph.empty:
         return {"ano": ano, "rows": 0, "data": []}
@@ -270,21 +324,27 @@ def professional_load(ano: int, top: int = 100):
     agg = agg.rename(columns={"unidade_id_cnes": "cnes"})
     return {"ano": ano, "rows": int(agg.shape[0]), "data": agg.to_dict(orient="records")}
 
-# -------- 4) Oferta x Demanda --------
+# -------- Oferta x Demanda --------
+def _detect_qty_column(df: pd.DataFrame):
+    for c in ["quantidade","qtd","qtd_oferta","quantidade_oferta","oferta_qtd","capacidade"]:
+        if c in df.columns and pd.api.types.is_numeric_dtype(df[c]): return c
+    return None
+
 @app.get("/insights/supply-demand")
 def supply_demand(ano: int, top: int = 200):
-    sol = _load_csv("solicitacao").copy()
+    sol = load_table("solicitacao").copy()
+    if "data_solicitacao" not in sol.columns:
+        return {"ano": ano, "rows": 0, "data": [], "oferta_coluna_usada": None}
     sol = sol[sol["data_solicitacao"].notna()]
     sol = sol[sol["data_solicitacao"].dt.year == ano]
     demand = sol.groupby("unidade_solicitante_id_cnes").size().reset_index(name="demanda").rename(columns={"unidade_solicitante_id_cnes": "cnes"})
 
-    ofe = _load_csv("oferta_programada").copy()
+    ofe = load_table("oferta_programada").copy()
     ofe = ofe[ofe["ano"] == ano]
     qty_col = _detect_qty_column(ofe)
-    if qty_col:
-        supply = ofe.groupby("unidade_id_cnes")[qty_col].sum(min_count=1).reset_index(name="oferta")
-    else:
-        supply = ofe.groupby("unidade_id_cnes").size().reset_index(name="oferta")
+    supply = (ofe.groupby("unidade_id_cnes")[qty_col].sum(min_count=1).reset_index(name="oferta")
+              if qty_col else
+              ofe.groupby("unidade_id_cnes").size().reset_index(name="oferta"))
     supply = supply.rename(columns={"unidade_id_cnes": "cnes"})
 
     df = pd.merge(demand, supply, on="cnes", how="outer")
@@ -293,98 +353,10 @@ def supply_demand(ano: int, top: int = 200):
 
     return {"ano": ano, "rows": int(df.shape[0]), "data": df.to_dict(orient="records"), "oferta_coluna_usada": qty_col or "COUNT(*)"}
 
-# -------- 5) Schema (campos p/ o frontend) --------
-@app.get("/schema")
-def schema():
-    # retorna o que o front precisa renderizar filtros/labels
-    return {
-        "marcacao": {
-            "primary_filters": [
-                {"name": "ano", "type": "int", "source": "data_solicitacao.year"},
-                {"name": "cnes", "type": "string", "source": "unidade_solicitante_id_cnes"},
-            ],
-            "fields": [
-                {"name":"unidade_solicitante_id_cnes", "type":"string", "example":"2269554"},
-                {"name":"data_solicitacao", "type":"datetime", "example":"2024-04-05 09:21:44"},
-                {"name":"data_marcacao", "type":"datetime", "example":"2024-05-10 08:00:00"},
-                {"name":"marcacao_executada", "type":"int(0/1)"},
-                {"name":"cid_solicitado_id", "type":"string", "example":"A90"},
-                {"name":"cid_agendado_id", "type":"string", "example":"A91"},
-                {"name":"solicitacao_status", "type":"string", "example":"AGENDAMENTO / CONFIRMADO / EXECUTANTE"}
-            ]
-        },
-        "solicitacao": {
-            "primary_filters": [
-                {"name": "ano", "type":"int", "source":"data_solicitacao.year"},
-                {"name": "cnes", "type":"string", "source":"unidade_solicitante_id_cnes"}
-            ],
-            "fields": [
-                {"name":"unidade_solicitante_id_cnes","type":"string"},
-                {"name":"data_solicitacao","type":"datetime"},
-                {"name":"cid_id","type":"string","optional":True}
-            ]
-        },
-        "tempo_espera": {
-            "primary_filters": [
-                {"name":"ano","type":"int"},
-                {"name":"mes","type":"int","range":"1..12"},
-                {"name":"cnes","type":"string","source":"unidade_id_cnes"},
-                {"name":"procedimento_id","type":"string"}
-            ],
-            "fields": [
-                {"name":"procedimento_id","type":"string"},
-                {"name":"n_execucoes","type":"int"},
-                {"name":"tempo_medio_espera","type":"float(dias)"},
-                {"name":"tempo_espera_mediano","type":"float(dias)"},
-                {"name":"tempo_espera_90_percentil","type":"float(dias)"},
-                {"name":"tempo_espera_desvio_padrao","type":"float"},
-                {"name":"ic95_inferior","type":"float"},
-                {"name":"ic95_superior","type":"float"},
-                {"name":"tempo_medio_espera_movel_3m","type":"float"},
-                {"name":"tempo_medio_espera_movel_6m","type":"float"},
-                {"name":"tempo_medio_espera_movel_12m","type":"float"},
-                {"name":"ano","type":"int"},
-                {"name":"mes","type":"int"},
-                {"name":"unidade_id_cnes","type":"string"}
-            ]
-        },
-        "profissional_historico": {
-            "primary_filters": [
-                {"name":"ano","type":"int"},
-                {"name":"cnes","type":"string","source":"unidade_id_cnes"}
-            ],
-            "fields": [
-                {"name":"unidade_id_cnes","type":"string"},
-                {"name":"profissional_id","type":"string"},
-                {"name":"ano","type":"int"},
-                {"name":"mes","type":"int"}
-            ]
-        },
-        "unidade_historico": {
-            "primary_filters": [
-                {"name":"ano","type":"int"},
-                {"name":"cnes","type":"string","source":"unidade_id_cnes"}
-            ],
-            "fields": [
-                {"name":"unidade_id_cnes","type":"string"},
-                {"name":"ano","type":"int"},
-                {"name":"mes","type":"int"},
-                {"name":"latitude","type":"float","optional":True},
-                {"name":"longitude","type":"float","optional":True},
-                {"name":"bairro","type":"string","optional":True},
-                {"name":"regiao","type":"string","optional":True}
-            ]
-        },
-        "oferta_programada": {
-            "primary_filters": [
-                {"name":"ano","type":"int"},
-                {"name":"cnes","type":"string","source":"unidade_id_cnes"}
-            ],
-            "fields": [
-                {"name":"unidade_id_cnes","type":"string"},
-                {"name":"ano","type":"int"},
-                {"name":"procedimento_id","type":"string","optional":True},
-                {"name":"quantidade","type":"int","note":"nome pode variar; backend detecta automaticamente"}
-            ]
-        }
-    }
+
+@app.get("/debug/columns")
+def debug_columns(table: str):
+    df = load_table(table)
+    sample = df.head(3).to_dict(orient="records")
+    return {"table": table, "columns": df.columns.tolist(), "sample": sample}
+
