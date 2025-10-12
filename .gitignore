@@ -96,6 +96,7 @@ backend/.pytest_cache/
 backend/*.sqlite3
 backend/dados
 dados/
+
 # Frontend
 frontend/.next/
 frontend/out/
