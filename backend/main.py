@@ -4,10 +4,13 @@ from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 import pandas as pd
 from dateutil.parser import parse as dtparse
-from backend.storage import load_table
+from storage import load_table
 from fastapi.responses import Response
 import json
 from fastapi import Request
+from fastapi import HTTPException, Header, Body
+import os, jwt
+
 
 # nomes de arquivos
 FN = {
@@ -360,3 +363,132 @@ def debug_columns(table: str):
     sample = df.head(3).to_dict(orient="records")
     return {"table": table, "columns": df.columns.tolist(), "sample": sample}
 
+
+import os, jwt
+from fastapi import HTTPException, Header, Body
+
+# ---------- Tentativa de importar do seu projeto ----------
+try:
+    # Ajuste os caminhos conforme seu projeto
+    from backend.session_service import InMemorySessionService  # exemplo
+except Exception:
+    # Fallback no-op
+    class InMemorySessionService:
+        def __init__(self): ...
+        def create_session(self, app_name: str, user_id: str, session_id: str): ...
+
+try:
+    from backend.runner import Runner  # exemplo
+except Exception:
+    # Fallback: Runner que apenas ecoa o texto
+    class _RespContent:
+        def __init__(self, text: str): self.text = text
+    class _Resp:
+        def __init__(self, text: str): self.content = _RespContent(text)
+    class Runner:
+        def __init__(self, agent=None, app_name:str="", session_service=None): ...
+        async def run(self, text: str):
+            return _Resp(f"[fallback] {text}")
+
+try:
+    from backend.agents.root_agent import root_agent  # exemplo
+except Exception:
+    root_agent = None  # Runner de fallback ignora o agent
+
+# ---------- Endpoint protegido com JWT ----------
+@app.post("/task")
+async def task(
+    user_input: str = Body(..., embed=True),
+    Authorization: str = Header(default=None)
+):
+    """
+    Executa uma interação com o agente NL2SQL.
+    Requer JWT no header Authorization: "Bearer <token>".
+    """
+
+    # 1) Validação do JWT
+    if not Authorization or not Authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Token ausente ou inválido no header Authorization.")
+
+    token = Authorization.split(" ", 1)[1].strip()
+    JWT_SECRET = os.environ.get("JWT_SECRET", "CHANGE_ME_SECRET")
+    JWT_ALG = os.environ.get("JWT_ALG", "HS256")
+
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALG])
+        user_id_claim = str(payload.get("sub") or payload.get("user_id") or "user_12345")
+        session_id_claim = str(payload.get("sid") or f"session_{user_id_claim}")
+        app_name_claim = str(payload.get("app") or "website_builder_app")
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token expirado.")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Token inválido.")
+
+    # 2) Execução do agente
+    try:
+        session_service = InMemorySessionService()
+        session_service.create_session(
+            app_name=app_name_claim,
+            user_id=user_id_claim,
+            session_id=session_id_claim
+        )
+
+        runner = Runner(
+            agent=root_agent,
+            app_name=app_name_claim,
+            session_service=session_service,
+        )
+
+        response = await runner.run(user_input)
+        return {"response": getattr(getattr(response, "content", None), "text", None) or "Sem resposta gerada pelo agente."}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao processar task: {str(e)}")
+
+import os, jwt, uuid
+from datetime import datetime, timedelta, timezone
+from fastapi import HTTPException, Body
+from pydantic import BaseModel
+
+JWT_SECRET = os.environ.get("JWT_SECRET", "CHANGE_ME_SECRET")
+JWT_ALG = os.environ.get("JWT_ALG", "HS256")
+ACCESS_TOKEN_EXPIRES_MINUTES = 60
+
+# Usuários "fake" só para demo — troque por sua validação real
+FAKE_USERS = {
+    "admin": "admin123",
+    "gustavo": "senha123"
+}
+
+class TokenRequest(BaseModel):
+    username: str
+    password: str
+
+def create_access_token(*, sub: str, app: str = "website_builder_app", sid: str | None = None):
+    now = datetime.now(timezone.utc)
+    exp = now + timedelta(minutes=ACCESS_TOKEN_EXPIRES_MINUTES)
+    payload = {
+        "iss": "analytica-agents",
+        "sub": sub,           # quem é o usuário
+        "app": app,           # nome da app (usado no /task)
+        "sid": sid or str(uuid.uuid4()),  # id de sessão
+        "iat": int(now.timestamp()),
+        "exp": int(exp.timestamp()),
+    }
+    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALG)
+
+@app.post("/token")
+def issue_token(body: TokenRequest = Body(...)):
+    # 1) Valida credenciais (substitua por consulta ao seu banco/Keycloak/etc.)
+    valid = FAKE_USERS.get(body.username) == body.password
+    if not valid:
+        raise HTTPException(status_code=401, detail="Credenciais inválidas.")
+
+    # 2) Emite JWT com 1h de expiração
+    token = create_access_token(sub=body.username)
+
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "expires_in": ACCESS_TOKEN_EXPIRES_MINUTES * 60  # segundos
+    }
