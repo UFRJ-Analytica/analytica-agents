@@ -10,7 +10,7 @@ import { MapLayerElement } from 'devextreme/viz/vector_map';
 import { VectorMapTypes } from 'devextreme-react/vector-map';
 
 const customizeLegendText = (arg) => {
-  return ['< 80000$', '80000$ to 100000$', '100000$ to 400000$', '> 400000$'][
+  return ['< 80000', '80000 to 100000', '100000 to 400000', '> 400000'][
     arg.index
   ];
 };
@@ -25,7 +25,7 @@ const customizeTooltip = (arg: MapLayerElement) => {
 
 export const SalesMapCard = ({ datasource, mapsData }) => (
   <CardAnalytics
-    title='Variáveis por região'
+    title='Procedimento: CONSULTA EM OFTALMOLOGIA - CIRURGIA DE CATARATA'
     contentClass='sales-by-state-map'
   >
     <VectorMap id='vector-map' bounds={[-118, 50, -80, 25]}>

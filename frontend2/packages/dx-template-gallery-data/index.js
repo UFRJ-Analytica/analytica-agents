@@ -1,3 +1,5 @@
+import Papa from 'papaparse';
+import React, { useEffect, useState } from 'react';
 /* eslint-disable spellcheck/spell-checker */
 const axios = require('axios');
 const luxon = require('luxon');
@@ -9,8 +11,56 @@ const promptDescription = `The HtmlEditor component is a client-side WYSIWYG tex
 The editor allows users to format text and integrate media elements into documents. 
 The result can be exported to HTML or Markdown.`;
 
+const CsvRow = {
+  solicitacao_id: '',
+  procedimento_sisreg_id: '',
+  procedimento: '',
+  vagas_esperadas_hora: '',
+  unidade_solicitante_id_cnes: '',
+  data_solicitacao: '',
+  mes_solicitacao: '',
+  ano_solicitacao: '',
+  data_desejada: '',
+  data_atualizacao: '',
+  solicitacao_status: '',
+  solicitacao_situacao: '',
+  paciente_id: '',
+  unidade_executante_id_cnes: '',
+  paciente_avisado: '',
+  marcacao_executada: '',
+  cid_agendado_id: '',
+  solicitacao_status_1: '',
+  solicitacao_risco: '',
+  mes_marcacao: '',
+  ano_marcacao: '',
+  unidade_solicitante: '',
+  bairro_solicitante: '',
+  bairro_solicitante_latitude: '',
+  bairro_solicitante_longitud: '',
+  unidade_executante: '',
+  bairro_executante: '',
+  bairro_executante_latitude: '',
+  bairro_executante_longitude: '',
+};
+
+
 const getData = async (url) => (await axios.get(`${baseUrl}/${url}`)).data;
 const getLocalData = async (url) => (await axios.get(`${url}`)).data;
+const getLocalCSV = async (url) => (await axios.get(`${url}`, { responseType: 'text' })
+    .then((response) => {
+      const parsed = Papa.parse(response.data, { header: true, delimiter: "," });
+      const grouped = parsed.data.reduce((acc,curr)=>{
+        const {data_solicitacao, ...data} = curr
+        const existing = acc[data_solicitacao]||[]
+        return {...acc, [data_solicitacao]:[...existing, data]}
+      },{})
+
+      const result = Object.entries(grouped).map(([name,data])=>({name, data}))
+      return result;
+    })
+    .catch((err) => console.error('CSV load error:', err)))
+    .data;
+
 const getContactOpportunities = async (id, active) => {
   const opportunities = await getData(`Users/Contacts/${id}/Opportunities`);
   return opportunities.filter((_, i) => {
@@ -48,6 +98,7 @@ export const getSalesByCategory = async (startDate, endDate) => getData(`Analyti
 export const getSales = async (startDate, endDate) => getData(`Analytics/Sales/${startDate}/${endDate}`);
 export const getSalesByStateAndCity = async (startDate, endDate) => getData(`Analytics/SalesByStateAndCity/${startDate}/${endDate}`);
 export const getSalesByOrderDate = async (groupByPeriod) => getData(`Analytics/SalesByOrderDate/${groupByPeriod}`);
+//export const getSalesByOrderDate = async (groupByPeriod) => getLocalData('/data/cirurgia_catarata.json')
 export const calcSalesByState = (sales) => Object.values(sales.reduce((res, item) => {
   const state = res[item.stateName] || {
     stateName: item.stateName,

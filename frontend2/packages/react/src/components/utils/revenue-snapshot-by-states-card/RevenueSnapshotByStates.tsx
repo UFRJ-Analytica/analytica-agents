@@ -11,7 +11,7 @@ import { CardAnalytics } from '../../library/card-analytics/CardAnalytics';
 import { SaleByState } from '../../../types/analytics';
 export const RevenueSnapshotByStatesCard = ({ datasource }: { datasource: SaleByState[] }) => (
   <CardAnalytics
-    title='Revenue Snapshot by States'
+    title='CID atendidos em 2024'
     contentClass='sales-by-state'
   >
     <PieChart

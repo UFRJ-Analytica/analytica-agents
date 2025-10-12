@@ -10,7 +10,7 @@ export const SalesPerformanceCard = ({ datasource, periods, selectedPeriod, onPe
   range: Date[]
 }) => (
   <CardAnalytics
-    title='Sales Performance'
+    title='Desempenho'
     contentClass='sales'
     additionalHeaderContent={
       <div className='sales-filter'>

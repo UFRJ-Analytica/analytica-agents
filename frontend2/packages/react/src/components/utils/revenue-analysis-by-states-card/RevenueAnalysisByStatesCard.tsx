@@ -10,15 +10,15 @@ import './RevenueAnalysisByStatesCard.scss';
 export const RevenueAnalysisByStatesCard = ({ datasource }: { datasource: SaleByStateAndCity[] }) => {
   return (
     <CardAnalytics
-      title='Revenue Analysis by States'
+      title='Dados brutos'
       contentClass='sales-by-state-and-city grid'
     >
       <DataGrid dataSource={datasource} height={290}>
-        <Column caption='State' dataField='stateName' hidingPriority={2} />
-        <Column caption='City' dataField='city' />
+        <Column caption='Marcacao Executada' dataField='stateName' hidingPriority={2} />
+        <Column caption='Risco' dataField='city' />
         <Column
           alignment='left'
-          caption='Amount'
+          caption='Bairro Solicitante'
           dataField='total'
           dataType='number'
           format='currency'
@@ -26,7 +26,7 @@ export const RevenueAnalysisByStatesCard = ({ datasource }: { datasource: SaleBy
         />
         <Column
           alignment='left'
-          caption='Percentage'
+          caption='Vagas Esperadas'
           dataField='percentage'
           cellRender={(cellInfo) => (
             <Bullet

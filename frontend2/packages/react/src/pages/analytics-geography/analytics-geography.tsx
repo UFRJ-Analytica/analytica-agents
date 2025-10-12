@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Item } from 'devextreme-react/toolbar';
-import * as mapsData from 'devextreme-dist/js/vectormap-data/usa.js';
+import * as mapsData from 'devextreme-dist/js/vectormap-data/usa';
 import LoadPanel from 'devextreme-react/load-panel';
 import ScrollView from 'devextreme-react/scroll-view';
 import { formatDate } from 'devextreme/localization';
@@ -58,7 +58,6 @@ export const AnalyticsGeography = () => {
   const [dateRange] = useState(ANALYTICS_PERIODS[DEFAULT_ANALYTICS_PERIOD_KEY].period.split('/'));
 
   const defaultDateRange = ANALYTICS_PERIODS[DEFAULT_ANALYTICS_PERIOD_KEY].period.split('/').map((d) => {
-    console.log(new Date(d));
     return new Date(d);
   });
 
@@ -88,8 +87,9 @@ export const AnalyticsGeography = () => {
   }, []);
 
   useEffect(() => {
-    getSalesByOrderDate(groupByPeriod.toLowerCase())
+    getSalesByOrderDate()
       .then((data) => {
+        console.log(data[0]);
         setSalesByDateAndCategory(data);
         setIsLoading(false);
       })
@@ -155,7 +155,7 @@ export const AnalyticsGeography = () => {
       </ToolbarAnalytics>
       <div className='cards wide'>
         <ToolbarAnalytics
-          title='Rio de Janeiro'
+          title='SMS CMS JORGE SALDANHA BANDEIRA DE MELLO AP 40'
           additionalToolbarContent={
             <Item
               location='before'
