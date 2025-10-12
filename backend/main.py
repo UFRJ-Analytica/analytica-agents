@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import pandas as pd
 from dateutil.parser import parse as dtparse
 
-# ================== Config ==================
+
 DATA_DIR = os.getenv("DATA_DIR", r"C:\Users\gustavo.costa\Documents\analytica-agents\dataset")
 
 # nomes de arquivos

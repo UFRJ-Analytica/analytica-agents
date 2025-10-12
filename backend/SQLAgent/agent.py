@@ -1,6 +1,10 @@
-from google.adk.agents import Agent
-import pandas as pd
 import os
+
+from google.adk.agents import Agent
+from google.adk.tools.mcp_tool.mcp_toolset import MCPToolset
+from google.adk.tools.mcp_tool.mcp_session_manager import StdioConnectionParams
+from mcp import StdioServerParameters
+
 TABLES = """
 name: solicitacoes
     description: Tabela contendo registros de solicitacoes feitas no SISREG.
@@ -559,83 +563,9 @@ Entre os atributos citados acima, o unidade_id_cnes / unidade_solicitante_id_cne
 
 """
 
-# Função para carregar um unico arquivo Parquet
-def load_single_parquet_file(file_name:str):
-    """
-    Carrega um unico arquivo Parquet e retorna como um DataFrame.
-    
-    Entrada:
-        file_path (str): Caminho completo do arquivo Parquet.
-    
-    Saída:
-        pd.DataFrame: DataFrame contendo os dados do arquivo.
-    """
-    return pd.read_parquet("dados\\" + file_name + '.parquet').to_dict()
-
-# Função para carregar arquivos Parquet
-def load_parquet_files(folder_path=r"backend\dados"):
-    """
-    Carrega todos os arquivos Parquet presentes na pasta especificada.
-    Retorna um dicionário de DataFrames, onde cada chave é o nome do arquivo sem extensão.
-    
-    Entrada:
-        folder_path (str): Caminho da pasta que contém os arquivos Parquet. Padrão é "dados".
-    
-    Saída:
-        dict: Dicionário com {nome_do_arquivo: pd.DataFrame}.
-    """
-    files = [f for f in os.listdir(folder_path) if f.endswith(".parquet")]
-    dataframes = {}
-    for file in files:
-        df_name = file.replace(".parquet", "")
-        df_path = os.path.join(folder_path, file)
-        dataframes[df_name] = pd.read_parquet(df_path)
-    return dataframes
-
-# Função para realizar joins automáticos
-def join_dataframes(dataframes):
-    """
-    Realiza joins automáticos entre múltiplos DataFrames. 
-    Para cada par de DataFrames, identifica colunas em comum e aplica join do tipo inner.
-    
-    Entrada:
-        dataframes (dict): Dicionário com {nome_do_arquivo: pd.DataFrame}.
-    
-    Saída:
-        pd.DataFrame: DataFrame final resultante da combinação de todos os DataFrames.
-    """
-    dfs = list(dataframes.values())
-    df_final = dfs[0]
-    for df in dfs[1:]:
-        common_cols = list(set(df_final.columns).intersection(set(df.columns)))
-        if common_cols:
-            df_final = df_final.merge(df, on=common_cols)
-    return df_final
-
-# Função para consultar dados
-def query_parquet_tool(prompt: str) -> str:
-    """
-    Consulta os dados dos arquivos Parquet carregados e combinados, filtrando colunas mencionadas no prompt.
-    Caso não haja correspondência de colunas, retorna as primeiras linhas do DataFrame combinado.
-    
-    Entrada:
-        prompt (str): Texto do usuário indicando quais colunas ou informações deseja visualizar.
-    
-    Saída:
-        str: Representação em texto das primeiras linhas do DataFrame filtrado ou completo.
-    """
-    dataframes = load_parquet_files(r"C:\Users\arthur.pinheiro_ipne\Desktop\analityca-agents\backend\dados")
-    df_final = join_dataframes(dataframes)
-    cols = [col for col in df_final.columns if col.lower() in prompt.lower()]
-    if cols:
-        result = df_final[cols].head(10)
-    else:
-        result = df_final.head(10)
-    return result.to_string()
-
 root_agent = Agent(
     model='gemini-2.5-flash',
-    name='ParquetAgent',
+    name='SQLAgent',
     description='Você é um agente que consulta dados de saúde carregados e combinados. Use as ferramentas disponíveis para responder às perguntas do usuário com base nos dados.',
     instruction='Você tem acesso a ferramentas que permitem carregar, combinar e consultar dados do Datalake de Saúde. ' \
                 'Use essas ferramentas para responder às perguntas do usuário com base nos dados disponíveis.'\
@@ -657,5 +587,21 @@ root_agent = Agent(
                 '         description: <descrição_da_coluna>'\
                 '# Tabelas disponíveis:' + TABLES 
                 ,
-    tools=[query_parquet_tool, load_single_parquet_file],
+    tools=[
+        MCPToolset(
+            connection_params=StdioConnectionParams(
+                server_params=StdioServerParameters(
+                    command="postgres-mcp",
+                    args=[
+                        "--access-mode=unrestricted",
+                        "--transport=sse"
+                    ],
+                    env={
+                        "DATABASE_URI": "postgresql://postgres:12345678@grupo3-agent-db.c7bh93xirm1i.us-east-1.rds.amazonaws.com:5432/grupo3-agent-db"
+                    }
+                )
+                
+            )
+        )
+    ],
 )
