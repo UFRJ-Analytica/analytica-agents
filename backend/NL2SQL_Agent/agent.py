@@ -5,6 +5,7 @@ from psycopg2.extras import RealDictCursor
 import psycopg2
 
 import pandas as pd
+import os
 
 # Cria a tool
 def execute_query(sql_query: str):
@@ -663,4 +664,3 @@ root_agent = Agent(
                 ,
                 tools=[execute_query]
 )
-
