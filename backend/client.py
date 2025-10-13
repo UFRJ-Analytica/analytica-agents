@@ -4,7 +4,7 @@ import requests
 url = "http://127.0.0.1:8000/task"
 
 # Texto que queremos enviar
-user_input_text = "Olá, este é um teste via Python requests!"
+user_input_text = "Quais os 5 procedimentos mais feitos no SISREG?"
 
 # Monta os parâmetros da query string
 params = {

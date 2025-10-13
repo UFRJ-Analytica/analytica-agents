@@ -149,18 +149,21 @@ def healthz():
 # 🔹 ENDPOINT /task (melhorado)
 # ===============================================================
 
-@app.post("/task")
-async def task(user_input: str = Query(..., description="Texto enviado pelo usuário")):
+os.environ["GOOGLE_API_KEY"] = "AIzaSyA_JwdU9mVBBu7fOLPi54XLcRRvT6HWj4E"
+# ---------- Função auxiliar síncrona ----------
+def run_task_sync(user_input: str):
     """
-    Executa uma interação com o agente NL2SQL.
+    Executa a lógica do agente NL2SQL dentro de um asyncio.run(),
+    para isolar event loops e evitar conflitos com FastAPI.
     """
-    try:
-        APP_NAME = "website_builder_app"
+    async def _run():
+        APP_NAME = "saude-agents-app"
         USER_ID = "user_12345"
-        SESSION_ID = "session_chat_loop_1"
+        SESSION_ID = "session_12345"
 
         session_service = InMemorySessionService()
-        session_service.create_session(
+        # O método create_session é síncrono — não precisa de await
+        await session_service.create_session(
             app_name=APP_NAME,
             user_id=USER_ID,
             session_id=SESSION_ID
@@ -172,23 +175,39 @@ async def task(user_input: str = Query(..., description="Texto enviado pelo usu�
             session_service=session_service,
         )
 
-        new_message = Content(role="user", parts=[Part(text=user_input)])
+        content = Content(role="user", parts=[Part(text=user_input)])
 
-        events_list: List[Any] = []
-        async for event in runner.run_async(
-            user_id=USER_ID,
-            session_id=SESSION_ID,
-            new_message=new_message
-        ):
-            events_list.append(event)
+        try:
+            final_response = None
+            async for event in runner.run_async(
+                user_id=USER_ID,
+                session_id=SESSION_ID,
+                new_message=content
+            ):
+                if event.is_final_response():
+                    final_response = event.content.parts[0].text
+                    break
 
-        if not events_list:
-            raise HTTPException(status_code=500, detail="Nenhum evento retornado pelo agente.")
+            if not final_response:
+                final_response = "Sem resposta gerada pelo agente."
 
-        last_event = events_list[-1]
-        text_response = getattr(last_event.parts[0], "text", None)
+            return {"response": final_response}
 
-        return {"response": text_response or "Sem resposta gerada pelo agente."}
+        except Exception as e:
+            raise RuntimeError(f"Erro interno na execução do agente: {str(e)}")
 
+    # Executa o contexto assíncrono isolado
+    return asyncio.run(_run())
+
+
+# ---------- Endpoint FastAPI ----------
+@app.post("/task")
+async def task(user_input: str = Query(..., description="Texto enviado pelo usuário")):
+    """
+    Endpoint principal que executa o agente dentro de um asyncio.run().
+    """
+    try:
+        result = await asyncio.to_thread(run_task_sync, user_input)
+        return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro ao processar task: {str(e)}")
