@@ -3,8 +3,8 @@ from typing import Optional
 from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 import pandas as pd
-from dateutil.parser import parse as dtparse
-from backend.storage import load_table
+from dateutil.parser import parse as dtparsecls
+from storage import load_table
 
 # ================== Config ==================
 
