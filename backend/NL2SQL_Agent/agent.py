@@ -1,10 +1,16 @@
 from google.adk.agents.llm_agent import Agent
 from google.adk.tools import FunctionTool
+from google.genai.types import Content, Part
+from google.adk.runners import Runner
+from google.adk.sessions import InMemorySessionService
 
 from psycopg2.extras import RealDictCursor
 import psycopg2
 
 import pandas as pd
+import os
+from dotenv import load_dotenv
+load_dotenv()
 
 # Cria a tool
 def execute_query(sql_query: str):
@@ -611,6 +617,7 @@ Entre os atributos citados acima, o unidade_id_cnes / unidade_solicitante_id_cne
 root_agent = Agent(
     model='gemini-2.5-flash',
     name='NL2SQL',
+    #api_key=os.getenv("GOOGLE_API_KEY"),
     description='An agent that translates natural language to SQL queries',
     instruction=f"""
                 Você é um agente especializado em traduzir solicitações em linguagem natural para consultas SQL PostgreSQL corretas, otimizadas e legíveis. 
@@ -663,4 +670,44 @@ root_agent = Agent(
                 ,
                 tools=[execute_query]
 )
+'''
+async def run_agent(user_input: str):
+    """
+    Executa uma interação com o agente NL2SQL.
+    """
+    APP_NAME = "saude-agents-app"
+    USER_ID = "user_12345"
+    SESSION_ID = "session_12345"
 
+    session_service = InMemorySessionService()
+    await session_service.create_session(
+        app_name=APP_NAME,
+        user_id=USER_ID,
+        session_id=SESSION_ID
+    )
+
+    runner = Runner(
+        agent=root_agent,
+        app_name=APP_NAME,
+        session_service=session_service,
+    )
+
+    content = Content(
+        role="user",
+        parts=[Part(text=user_input)]
+    )
+
+    events = runner.run_async(
+        user_id=USER_ID,
+        session_id=SESSION_ID,
+        new_message=content
+    )
+
+    # Process events to get the final response
+    async for event in events:
+        if event.is_final_response():
+            return {"response": event.content.parts[0].text}
+            
+import asyncio
+asyncio.run(run_agent("Oi"))
+'''

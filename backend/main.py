@@ -1,9 +1,10 @@
 import os
-from typing import Optional
-from fastapi import FastAPI, Query
-from fastapi import FastAPI, Query
-from fastapi.middleware.cors import CORSMiddleware
+import asyncio
+from typing import Optional, Dict, Any, List
+
 import pandas as pd
+from fastapi import FastAPI, HTTPException, Query
+from fastapi.middleware.cors import CORSMiddleware
 from dateutil.parser import parse as dtparse
 from storage import load_table
 from fastapi.responses import Response
@@ -11,9 +12,12 @@ import json
 from fastapi import Request
 from fastapi import HTTPException, Header, Body
 import os, jwt
+# --- Google ADK / Agent ---
+from google.adk.runners import Runner
+from google.adk.sessions import InMemorySessionService
+from google.genai.types import Content, Part
+from NL2SQL_Agent.agent import root_agent
 
-
-# nomes de arquivos
 FN = {
     "marcacao": "marcacao.csv",
     "solicitacao": "solicitacao.csv",
@@ -24,117 +28,67 @@ FN = {
     "cid": "cid.csv",
 }
 
-# tipagem mínima por coluna (ajustável se necessário)
-DTYPES = {
-    "cid": {
-        "cid_id": "string",        # ex: "I10"
-        "cid": "string",           # descrição textual
-        "cid_categoria.id": "string",
-        "cid_categoria.descricao": "string",
-        "cid_categoria.abreviatura": "string",
-        "cid_capitulo.id": "string",
-        "cid_capitulo.descricao": "string",
-        "cid_grupo.descricao": "string",
-        "cid_grupo.abreviatura": "string",
-        "comprimento": "Int64"
-    },
-    "marcacao": {
-        "unidade_solicitante_id_cnes": "string",
-        "marcacao_executada": "Int64",
-        "cid_solicitado_id": "string",
-        "cid_agendado_id": "string",
-    },
-    "solicitacao": {
-        "unidade_solicitante_id_cnes": "string",
-    },
-    "profissional_historico": {
-        "unidade_id_cnes": "string",
-        "profissional_id": "string",
-        "ano": "Int64",
-        "mes": "Int64",
-    },
-    "unidade_historico": {
-        "unidade_id_cnes": "string",
-        "ano": "Int64",
-        "mes": "Int64",
-        # se tiver geo:
-        # "latitude": "float64", "longitude": "float64"
-    },
-    "oferta_programada": {
-        "unidade_id_cnes": "string",
-        "ano": "Int64",
-        # quantidade pode variar de nome, detectamos dinamicamente
-    },
-    "tempo_espera": {
-        "procedimento_id": "string",
-        "n_execucoes": "Int64",
-        "tempo_medio_espera": "float64",
-        "tempo_espera_mediano": "float64",
-        "tempo_espera_90_percentil": "float64",
-        "tempo_espera_desvio_padrao": "float64",
-        "ic95_inferior": "float64",
-        "ic95_superior": "float64",
-        "tempo_medio_espera_movel_3m": "float64",
-        "tempo_medio_espera_movel_6m": "float64",
-        "tempo_medio_espera_movel_12m": "float64",
-        "ano": "Int64",
-        "mes": "Int64",
-        "unidade_id_cnes": "string",
-    },
-}
+# 🔹 Tipos de colunas e cache global
+DTYPES = {...}  # manter igual ao seu
+DATE_COLS = {...}
+_CACHE: Dict[str, pd.DataFrame] = {}
 
-DATE_COLS = {
-    "marcacao": ["data_solicitacao", "data_aprovacao", "data_confirmacao", "data_marcacao", "data_cancelamento", "data_atualizacao", "laudo_data_observacao"],
-    "solicitacao": ["data_solicitacao", "data_desejada", "data_aprovacao", "data_atualizacao"],
-}
+# ===============================================================
+# 🔹 UTILITÁRIOS DE CARREGAMENTO
+# ===============================================================
 
-# ================== Carregamento (cache) ==================
-_CACHE = {}
+def _load_csv(name: str) -> pd.DataFrame:
+    """Carrega um CSV em cache, com tipagem e parsing de datas."""
+    if name in _CACHE:
+        return _CACHE[name]
 
+    path = os.path.join(DATA_DIR, FN[name])
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail=f"Arquivo não encontrado: {path}")
 
+    try:
+        df = pd.read_csv(
+            path,
+            dtype=DTYPES.get(name),
+            parse_dates=DATE_COLS.get(name, []),
+            low_memory=False,
+        )
+        _CACHE[name] = df
+        return df
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao carregar {name}: {str(e)}")
 
-def _detect_qty_column(df: pd.DataFrame):
-    # tenta achar uma coluna de quantidade na oferta_programada (ajuste se souber o nome certo)
-    candidates = ["quantidade", "qtd", "qtd_oferta", "quantidade_oferta", "oferta_qtd", "capacidade"]
-    for c in candidates:
+def _detect_qty_column(df: pd.DataFrame) -> Optional[str]:
+    """Detecta dinamicamente a coluna de quantidade."""
+    for c in ["quantidade", "qtd", "qtd_oferta", "quantidade_oferta", "oferta_qtd", "capacidade"]:
         if c in df.columns and pd.api.types.is_numeric_dtype(df[c]):
             return c
     return None
-# =================== cid ==================================
 
-def _cid_lookup_map() -> dict:
-    """Mapeia cid_id -> dict com campos úteis (descrições, categoria, capítulo)."""
+# ===============================================================
+# 🔹 FUNÇÕES CID (mantém seu código)
+# ===============================================================
+
+def _cid_lookup_map() -> Dict[str, dict]:
     df = _load_csv("cid").copy()
     if "cid_id" not in df.columns:
         return {}
-    # renomeia para chaves planas padronizadas
-    rename_cols = {
-        "cid": "cid_descricao",
-        "cid_categoria.id": "cid_categoria_id",
-        "cid_categoria.descricao": "cid_categoria_descricao",
-        "cid_categoria.abreviatura": "cid_categoria_abrev",
-        "cid_capitulo.id": "cid_capitulo_id",
-        "cid_capitulo.descricao": "cid_capitulo_descricao",
-        "cid_grupo.descricao": "cid_grupos_descricoes",
-        "cid_grupo.abreviatura": "cid_grupos_abrevs",
-    }
-    for c, newc in rename_cols.items():
-        if c in df.columns:
-            df = df.rename(columns={c: newc})
 
-    # cria dict
-    keep = ["cid_id", "cid_descricao", "cid_categoria_id", "cid_categoria_descricao",
-            "cid_categoria_abrev", "cid_capitulo_id", "cid_capitulo_descricao",
-            "cid_grupos_descricoes", "cid_grupos_abrevs", "comprimento"]
-    keep = [k for k in keep if k in df.columns]
-    df2 = df[keep].drop_duplicates(subset=["cid_id"])
-    return {row["cid_id"]: row.drop(labels=["cid_id"]).to_dict() for _, row in df2.iterrows()}
+    rename_cols = {...}  # manter o seu mapeamento
+    df.rename(columns={k: v for k, v in rename_cols.items() if k in df.columns}, inplace=True)
+
+    keep = [c for c in [
+        "cid_id", "cid_descricao", "cid_categoria_id", "cid_categoria_descricao",
+        "cid_categoria_abrev", "cid_capitulo_id", "cid_capitulo_descricao",
+        "cid_grupos_descricoes", "cid_grupos_abrevs", "comprimento"
+    ] if c in df.columns]
+
+    return {
+        row["cid_id"]: row.drop(labels=["cid_id"]).to_dict()
+        for _, row in df[keep].drop_duplicates(subset=["cid_id"]).iterrows()
+    }
 
 def _enrich_with_cid(df: pd.DataFrame, col_name: str) -> pd.DataFrame:
-    """
-    Enriquecer um DataFrame que tenha uma coluna com código CID (ex.: 'cid_solicitado_id' ou 'cid_agendado_id').
-    Retorna as colunas extras com sufixo baseado em 'col_name'.
-    """
     if col_name not in df.columns:
         return df
 
@@ -142,12 +96,10 @@ def _enrich_with_cid(df: pd.DataFrame, col_name: str) -> pd.DataFrame:
     if not lookup:
         return df
 
-    # aplica mapeamento linha a linha
-    def _expander(cid_code: Optional[str]) -> dict:
+    def _expand(cid_code: Optional[str]) -> dict:
         if pd.isna(cid_code):
             return {}
-        cid_code = str(cid_code)
-        meta = lookup.get(cid_code, {})
+        meta = lookup.get(str(cid_code), {})
         return {
             f"{col_name}_descricao": meta.get("cid_descricao"),
             f"{col_name}_categoria_id": meta.get("cid_categoria_id"),
@@ -166,8 +118,10 @@ def _enrich_with_cid(df: pd.DataFrame, col_name: str) -> pd.DataFrame:
 app = FastAPI(title="Analytica Agents API", version="0.4.0")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], allow_credentials=True,
-    allow_methods=["*"], allow_headers=["*"],
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
