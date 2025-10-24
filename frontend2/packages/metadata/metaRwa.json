@@ -1,0 +1,72 @@
+[
+    {
+        "Name": "Analytics Templates",
+        "Groups": [
+            {
+                "Name": "Overview Dashboard",
+                "Demos": [
+                    {
+                        "Title": "Overview Dashboard",
+                        "Name": "analytics-dashboard",
+                        "DemoType": "Rwa",
+                        "AvailableApproaches": [
+                            "Angular",
+                            "React",
+                            "Vue"
+                        ]
+                    }
+                ]
+            },
+            {
+                "Name": "Sales Dashboard",
+                "Demos": [
+                    {
+                        "Title": "Sales Dashboard",
+                        "Name": "analytics-sales-analysis",
+                        "DemoType": "Rwa",
+                        "AvailableApproaches": [
+                            "Angular",
+                            "React",
+                            "Vue"
+                        ]
+                    }
+                ]
+            },
+            {
+                "Name": "Geography Dashboard",
+                "Demos": [
+                    {
+                        "Title": "Geography Dashboard",
+                        "Name": "analytics-geography",
+                        "DemoType": "Rwa",
+                        "AvailableApproaches": [
+                            "Angular",
+                            "React",
+                            "Vue"
+                        ]
+                    }
+                ]
+            }
+        ]
+    },
+    {
+        "Name": "Common Templates",
+        "Groups": [
+            {
+                "Name": "User Profile",
+                "Demos": [
+                    {
+                        "Title": "User Profile",
+                        "Name": "user-profile",
+                        "DemoType": "Rwa",
+                        "AvailableApproaches": [
+                            "Angular",
+                            "React",
+                            "Vue"
+                        ]
+                    }
+                ]
+            }
+        ]
+    }
+]
