@@ -1,107 +1,87 @@
-# ---- OS / IDE ----
+# OS / System
 .DS_Store
 Thumbs.db
-.vscode/
-.idea/
-*.iml
+desktop.ini
 
-# ---- Python (backend) ----
+# Python
 __pycache__/
 *.py[cod]
-*.pyo
 *.pyd
 *.so
-*.egg-info/
-.eggs/
-.build/
-dist/
+*.dylib
 build/
-.venv/
-venv/
-env/
-pip-wheel-metadata/
+dist/
+.eggs/
+*.egg-info/
+.cache/
 .pytest_cache/
+.tox/
 .mypy_cache/
+.ruff_cache/
 .coverage
 .coverage.*
 htmlcov/
-.cache/
-backend/dados
-# Environment & local settings
-backend/.env
-*.env
-.env.*
-!.env.example
 
-# Jupyter (se usar no SDumont/local)
+# Jupyter
 .ipynb_checkpoints/
+.jupyter/
 
-# ---- Node/React (frontend) ----
-frontend/node_modules/
-frontend/.cache/
-frontend/.parcel-cache/
-frontend/build/
-frontend/dist/
+# FastAPI / Uvicorn temp files
+uvicorn.err
+uvicorn.out
+uvicorn.pid
+
+# Environments & secrets
+.env
+.env.*
+!*.example
+backend/.env
 frontend/.env.local
-frontend/.env.development.local
-frontend/.env.test.local
-frontend/.env.production.local
+.python-version
+*.pem
+*.key
+*.crt
+*.p12
+*.der
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Editors / IDEs
+.vscode/
+.idea/
+*.code-workspace
+*.swp
+*~
+
+# Project data / indexes
+backend/dados/
+.chroma/
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+dist/
+.turbo/
+.eslintcache
+.npm/
+.yarn/
+.pnp.*
+.vercel/
+
+# Logs
+*.log
+logs/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-pnpm-debug.log*
 
-# ---- Logs ----
-*.log
-logs/
-backend/*.log
-frontend/*.log
+# Codex / tooling
+.codex/
+.cline/
 
-# ---- Docker / Compose ----
-**/.docker/
-docker-data/
-.tmp/
-
-# ---- Secrets / Credenciais ----
-# BigQuery / GCP
-service-account.json
-**/service-account.json
-secrets/
-**/secrets/**
-# ADC locais (caso monte do host no container)
-**/.config/gcloud/
-# Qualquer credencial/arquivo sensível
-*.key
-*.pem
-*.p12
-*.crt
-
-# ---- Coverage / Reports ----
-coverage/
-reports/
-report.xml
-junit.xml
-
-# ---- Misc ----
-*.swp
-*.swo
-*.tmp
-*.bak
-*.orig
-
-# ---- Project-specific paths ----
-# Backend
-backend/__pycache__/
-backend/.pytest_cache/
-backend/*.sqlite3
-backend/dadosbackend/dados
-dados/
-
-# Frontend
-frontend/.next/
-frontend/out/
-frontend/coverage/
-
-# ---- Keep sample envs versionados ----
-!backend/.env.example
-!frontend/.env.example
+# Git (kept by Git itself; listed for clarity)
+.git/
