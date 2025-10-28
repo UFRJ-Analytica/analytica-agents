@@ -1,12 +1,12 @@
 pandas
 fastapi[standard]
-uvicorn
+uvicorn[standard]
 python-dotenv
 python-multipart
 google-adk
 pyarrow
-
+python-dateutil
 s3fs
-
+PyJWT
 postgres-mcp
 psycopg2-binary

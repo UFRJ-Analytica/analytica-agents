@@ -1,22 +1,29 @@
 import os
+import os
 import asyncio
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Optional, Dict, Any, List
 
 import pandas as pd
+from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from dateutil.parser import parse as dtparse
-from storage import load_table
+from backend.storage import load_table
 from fastapi.responses import Response
 import json
 from fastapi import Request
 from fastapi import HTTPException, Header, Body
-import os, jwt
+import jwt
+from pydantic import BaseModel
 # --- Google ADK / Agent ---
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
 from google.genai.types import Content, Part
-from NL2SQL_Agent.agent import root_agent
+from backend.NL2SQL_Agent.agent import root_agent
+from backend.susana.config import JWT_SECRET, JWT_ALG
+from backend.susana.router import router as susana_router
 
 FN = {
     "marcacao": "marcacao.csv",
@@ -27,6 +34,26 @@ FN = {
     "oferta_programada": "oferta_programada.csv",
     "cid": "cid.csv",
 }
+
+# Diretório padrão dos dados
+BASE_DIR = Path(__file__).resolve().parent
+PROJECT_ROOT = BASE_DIR.parent
+load_dotenv(PROJECT_ROOT / ".env")
+DATA_DIR = os.environ.get("DATA_DIR", str((BASE_DIR / "dados").resolve()))
+
+ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "admin")
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "admin123")
+TOKEN_EXPIRE_MINUTES = int(os.environ.get("TOKEN_EXPIRE_MINUTES", "60"))
+
+# ======== Simple authentication ========
+class TokenRequest(BaseModel):
+    username: str
+    password: str
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
 
 # 🔹 Tipos de colunas e cache global
 DTYPES = {...}  # manter igual ao seu
@@ -108,7 +135,7 @@ def _enrich_with_cid(df: pd.DataFrame, col_name: str) -> pd.DataFrame:
             f"{col_name}_capitulo_descricao": meta.get("cid_capitulo_descricao"),
         }
 
-    meta_df = df[col_name].apply(_expander).apply(pd.Series)
+    meta_df = df[col_name].apply(_expand).apply(pd.Series)
     for c in meta_df.columns:
         df[c] = meta_df[c]
     return df
@@ -123,6 +150,26 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.post("/token", response_model=TokenResponse)
+def issue_token(payload: TokenRequest) -> TokenResponse:
+    if payload.username != ADMIN_USERNAME or payload.password != ADMIN_PASSWORD:
+        raise HTTPException(status_code=401, detail="Credenciais invalidas.")
+
+    if not JWT_SECRET:
+        raise HTTPException(status_code=500, detail="Configure JWT_SECRET no ambiente.")
+
+    now = datetime.now(timezone.utc)
+    expires_at = now + timedelta(minutes=TOKEN_EXPIRE_MINUTES)
+    claims = {
+        "sub": payload.username,
+        "iat": int(now.timestamp()),
+        "exp": int(expires_at.timestamp()),
+    }
+    token = jwt.encode(claims, JWT_SECRET, algorithm=JWT_ALG)
+    return TokenResponse(access_token=token)
+
+app.include_router(susana_router)
 
 
 def maybe_pretty(payload, pretty: bool):
