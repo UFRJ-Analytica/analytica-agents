@@ -121,6 +121,7 @@ Configuracao sugerida com dois services no mesmo projeto Railway:
      - `GEMINI_API_KEY` (ou variantes `GOOGLE_API_KEY`, `GOOGLE_GENAI_API_KEY`, ou `GOOGLE_APPLICATION_CREDENTIALS`)
      - `GEMINI_MODEL` (ex.: `gemini-1.5-flash`)
      - `DATA_DIR` (se usar CSV/Parquet locais enviados como volume/S3)
+     - `DATA_BACKEND`, `DATA_URI` e, se necessário, `SUPABASE_STORAGE_TOKEN` (remova quebras de linha ao colar a chave)
    - Opcional: desative `Sleep Application` para manter o container ativo.
 
 2. **Frontend (Next.js)**

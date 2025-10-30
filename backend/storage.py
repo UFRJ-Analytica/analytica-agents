@@ -37,7 +37,9 @@ def _make_path(name: str) -> str:
 def _read_supabase(path: str) -> bytes:
     headers = {}
     if SUPABASE_TOKEN:
-        headers["Authorization"] = f"Bearer {SUPABASE_TOKEN}"
+        token = SUPABASE_TOKEN.strip()
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
     resp = requests.get(path, headers=headers, timeout=60)
     resp.raise_for_status()
     return resp.content
