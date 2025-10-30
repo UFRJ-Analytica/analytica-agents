@@ -50,6 +50,7 @@ frontend/
     - `GOOGLE_APPLICATION_CREDENTIALS=/caminho/service-account.json`
   - Modelo Gemini (padrão atualizado): `GEMINI_MODEL=gemini-2.5-flash`
   - Dados locais (opcional, usados pelos insights): `DATA_DIR=backend/dados`
+  - Se precisar reduzir o tamanho dos dados (ex.: conta free do Supabase), gere amostras com `.\.venv\Scripts\python.exe scripts/create_parquet_samples.py` e então configure `DATA_BACKEND=local` + `DATA_URI=backend/dados_sample`.
 
 3) Subir a API localmente (carrega `.env` da raiz)
 - `uvicorn backend.main:app --host 0.0.0.0 --port 8000`
@@ -103,6 +104,42 @@ Crie/ajuste `docker-compose.yml` (se preferir containerizar os dois):
 Dicas rápidas:
 - Build/Run: `docker compose up --build -d`
 - Logs: `docker compose logs -f`
+
+### Railway (FastAPI + Next.js)
+
+Configuracao sugerida com dois services no mesmo projeto Railway:
+
+1. **Backend (FastAPI)**
+   - Service root: diretorio raiz do repositorio (`railway.json` na raiz aponta para `backend/Dockerfile`).
+   - Builder: `Dockerfile`.
+   - Porta: deixe o padrao (`$PORT` fornecido pelo Railway).
+   - Healthcheck: `/healthz` (ja configurado no `railway.json`).
+   - Variaveis obrigatorias (defina via Railway):
+     - `JWT_SECRET` (obrigatorio)
+     - `JWT_ALG=HS256` (ou outro suportado)
+     - `ADMIN_USERNAME` e `ADMIN_PASSWORD` (credenciais do `/token`)
+     - `GEMINI_API_KEY` (ou variantes `GOOGLE_API_KEY`, `GOOGLE_GENAI_API_KEY`, ou `GOOGLE_APPLICATION_CREDENTIALS`)
+     - `GEMINI_MODEL` (ex.: `gemini-2.5-flash`)
+     - `DATA_DIR` (se usar CSV/Parquet locais enviados como volume/S3)
+   - Opcional: desative `Sleep Application` para manter o container ativo.
+
+2. **Frontend (Next.js)**
+   - Crie um novo service apontando para `frontend/` (usa `frontend/railway.json` + `frontend/Dockerfile`).
+   - Variaveis do ambiente:
+     - `NEXT_PUBLIC_BACKEND_URL=https://<service-backend>.railway.app`
+     - `BACKEND_USERNAME` e `BACKEND_PASSWORD` (mesmos valores configurados no backend)
+   - Builder: `Dockerfile` (multi-stage com `npm ci`, `next build` e `next start`).
+   - Porta padrao: utilize `$PORT` fornecido pelo Railway.
+
+3. **Integracao**
+   - Depois que o backend subir, copie a URL publica dele e atualize `NEXT_PUBLIC_BACKEND_URL` no service do frontend.
+   - Revise as variaveis sensiveis (JWT, Gemini) sempre via painel do Railway (`Variables`).
+   - Se precisar de banco de dados ou buckets, adicione plug-ins do Railway e configure as variaveis no backend.
+
+4. **Deploy via CLI (opcional)**
+   - `railway link` (escolha o projeto)
+   - `railway up --service backend`
+   - `railway up --service frontend`
 
 ### systemd (exemplo backend)
 

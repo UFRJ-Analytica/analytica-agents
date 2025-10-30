@@ -1,11 +1,18 @@
 "use client"
 import dynamic from 'next/dynamic'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ComponentType, type CSSProperties } from 'react'
+import type { MapContainerProps, MarkerProps, PopupProps, TileLayerProps } from 'react-leaflet'
 
-const MapContainer = dynamic(() => import('react-leaflet').then(m => m.MapContainer), { ssr: false })
-const TileLayer = dynamic(() => import('react-leaflet').then(m => m.TileLayer), { ssr: false })
-const Marker = dynamic(() => import('react-leaflet').then(m => m.Marker), { ssr: false })
-const Popup = dynamic(() => import('react-leaflet').then(m => m.Popup), { ssr: false })
+type MapComponentProps = MapContainerProps & {
+  center?: [number, number]
+  zoom?: number
+  style?: CSSProperties
+}
+
+const MapContainer = dynamic(() => import('react-leaflet').then(m => m.MapContainer), { ssr: false }) as ComponentType<MapComponentProps>
+const TileLayer = dynamic(() => import('react-leaflet').then(m => m.TileLayer), { ssr: false }) as ComponentType<TileLayerProps>
+const Marker = dynamic(() => import('react-leaflet').then(m => m.Marker), { ssr: false }) as ComponentType<MarkerProps>
+const Popup = dynamic(() => import('react-leaflet').then(m => m.Popup), { ssr: false }) as ComponentType<PopupProps>
 
 export default function MapPage() {
   const [points, setPoints] = useState<any[]>([])

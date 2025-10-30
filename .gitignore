@@ -58,6 +58,7 @@ env/
 
 # Project data / indexes
 backend/dados/
+backend/dados_sample/
 .chroma/
 
 # Node / Next.js

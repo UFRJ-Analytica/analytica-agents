@@ -1,20 +1,25 @@
-FROM python:3.11-slim
+FROM python:3.12-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
 
 WORKDIR /app
 
-# deps de sistema (se precisar compilar algo)
+# System dependencies kept lean for psycopg2-binary and curl usage
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential curl && \
     rm -rf /var/lib/apt/lists/*
 
-# copiar requirements e instalar
-COPY backend/requirements.txt /app/requirements.txt
-RUN pip install --no-cache-dir -r /app/requirements.txt
+# Install Python dependencies
+COPY backend/requirements.txt ./requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
-# copiar projeto
-COPY backend /app/backend
+# Copy project sources
+COPY backend ./backend
 
-# porta (só documentação)
+ENV PYTHONPATH=/app
+
 EXPOSE 8000
 
-# a command real é dada no docker-compose (uvicorn)
+CMD ["sh", "-c", "uvicorn backend.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
