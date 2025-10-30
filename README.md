@@ -48,7 +48,7 @@ frontend/
     - `GOOGLE_API_KEY=...` ou
     - `GOOGLE_GENAI_API_KEY=...` ou
     - `GOOGLE_APPLICATION_CREDENTIALS=/caminho/service-account.json`
-  - Modelo Gemini (padrão atualizado): `GEMINI_MODEL=gemini-2.5-flash`
+  - Modelo Gemini (padrão atualizado): `GEMINI_MODEL=gemini-1.5-flash`
   - Dados locais (opcional, usados pelos insights): `DATA_DIR=backend/dados`
   - Se precisar reduzir o tamanho dos dados (ex.: conta free do Supabase), gere amostras com `.\.venv\Scripts\python.exe scripts/create_parquet_samples.py` e então configure `DATA_BACKEND=local` + `DATA_URI=backend/dados_sample`.
 
@@ -119,7 +119,7 @@ Configuracao sugerida com dois services no mesmo projeto Railway:
      - `JWT_ALG=HS256` (ou outro suportado)
      - `ADMIN_USERNAME` e `ADMIN_PASSWORD` (credenciais do `/token`)
      - `GEMINI_API_KEY` (ou variantes `GOOGLE_API_KEY`, `GOOGLE_GENAI_API_KEY`, ou `GOOGLE_APPLICATION_CREDENTIALS`)
-     - `GEMINI_MODEL` (ex.: `gemini-2.5-flash`)
+     - `GEMINI_MODEL` (ex.: `gemini-1.5-flash`)
      - `DATA_DIR` (se usar CSV/Parquet locais enviados como volume/S3)
    - Opcional: desative `Sleep Application` para manter o container ativo.
 
@@ -156,7 +156,7 @@ Configuracao sugerida com dois services no mesmo projeto Railway:
 - 500 por credenciais do Gemini:
   - Garanta uma das variáveis: `GEMINI_API_KEY` (ou `GOOGLE_API_KEY`/`GOOGLE_GENAI_API_KEY`) ou apontar `GOOGLE_APPLICATION_CREDENTIALS` para uma service account válida.
 - Modelo não encontrado (404 NOT_FOUND):
-  - Ajuste `GEMINI_MODEL` (ex.: `gemini-2.5-flash`, `gemini-2.0-flash`, `gemini-2.5-pro`).
+- Ajuste `GEMINI_MODEL` (ex.: `gemini-1.5-flash`, `gemini-2.0-flash`, `gemini-2.5-pro`).
 - Algoritmo JWT inválido:
   - `JWT_ALG` é sanitizado em `backend/susana/config.py`; use `HS256` (padrão) ou outra suportada.
 - `.env` duplicado:

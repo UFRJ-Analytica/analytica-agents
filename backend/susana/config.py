@@ -34,7 +34,7 @@ GEMINI_API_KEY = (
     or os.environ.get("GOOGLE_GENAI_API_KEY")
     or ""
 )
-GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-1.5-flash")
 EMBED_MODEL = os.environ.get("EMBED_MODEL", "text-embedding-004")
 
 DATA_DIR = os.environ.get("DATA_DIR", os.getcwd())
