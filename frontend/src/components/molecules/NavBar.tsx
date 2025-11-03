@@ -1,15 +1,43 @@
 "use client"
 import React from 'react'
 import Link from 'next/link'
+import { usePathname } from 'next/navigation'
+import Stack from '@mui/material/Stack'
+import Button from '../atoms/Button'
+
+const LINKS = [
+  { href: '/', label: 'Início' },
+  { href: '/map', label: 'Mapa' },
+  { href: '/chat', label: 'Susana IA' },
+]
 
 export default function NavBar() {
-  const linkStyle: React.CSSProperties = { textDecoration: 'none', color: '#111', padding: '8px 10px', borderRadius: 6 }
+  const pathname = usePathname()
+
   return (
-    <nav style={{ display: 'flex', gap: 8 }}>
-      <Link href="/" style={linkStyle}>Início</Link>
-      <Link href="/map" style={linkStyle}>Mapa</Link>
-      <Link href="/chat" style={linkStyle}>Susana IA</Link>
-    </nav>
+    <Stack direction="row" spacing={1}>
+      {LINKS.map((link) => {
+        const isActive = pathname === link.href
+        return (
+          <Button
+            key={link.href}
+            component={Link}
+            href={link.href}
+            variant={isActive ? 'contained' : 'text'}
+            color={isActive ? 'primary' : 'inherit'}
+            size="small"
+            sx={{
+              borderRadius: 999,
+              fontWeight: 600,
+              px: 2.5,
+              py: 0.75,
+              bgcolor: isActive ? 'primary.main' : 'transparent',
+            }}
+          >
+            {link.label}
+          </Button>
+        )
+      })}
+    </Stack>
   )
 }
-

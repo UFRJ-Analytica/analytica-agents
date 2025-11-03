@@ -66,3 +66,4 @@ def json_truncate(data: dict, limit: int = 4000):
             return truncated
 
     return {"detail": "tool result truncated due to size limit"}
+    

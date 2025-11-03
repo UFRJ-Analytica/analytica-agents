@@ -1,13 +1,25 @@
 "use client"
 import React from 'react'
+import Box from '@mui/material/Box'
+import Container from '@mui/material/Container'
+import Typography from '@mui/material/Typography'
 
 export default function FooterBar() {
   return (
-    <footer style={{ borderTop: '1px solid #eee', background: '#fff', marginTop: 24 }}>
-      <div style={{ maxWidth: 1100, margin: '0 auto', padding: '16px' }}>
-        <small style={{ color: '#666' }}>© 2025 Analytica Agents — Susana IA</small>
-      </div>
-    </footer>
+    <Box
+      component="footer"
+      sx={{
+        borderTop: '1px solid',
+        borderColor: 'divider',
+        background: 'rgba(255,255,255,0.85)',
+        backdropFilter: 'blur(6px)',
+      }}
+    >
+      <Container maxWidth="lg" sx={{ py: 3 }}>
+        <Typography variant="caption" color="text.secondary">
+          Copyright {new Date().getFullYear()} Analytica Agents - Susana IA
+        </Typography>
+      </Container>
+    </Box>
   )
 }
-
