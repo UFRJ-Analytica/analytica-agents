@@ -10,3 +10,4 @@ s3fs
 PyJWT
 postgres-mcp
 psycopg2-binary
+supabase>=2.6.0

@@ -1,0 +1,32 @@
+
+
+
+
+# Git e caches
+.git
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+*.log
+*.out
+*.err
+*.ipynb
+*.pem
+*.log
+*.pid
+*.err
+*.out
+docker-compose.yml
+railway.schema.json
+.env
+.env.*
+# Dados pesados
+dados/
+dados_sample/
+*.parquet
+*.csv
+
+# Outros
+dist/
+build/

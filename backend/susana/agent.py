@@ -32,50 +32,58 @@ def _build_tools(trace: Dict[str, Any]) -> List[FunctionTool]:
         trace["context_docs"] = _extract_context(payload)
         return payload
 
-    def geo_units_tool(ano: int = 2024) -> Dict[str, Any]:
+    def geo_units_tool(ano: Optional[int] = None) -> Dict[str, Any]:
         from backend.main import geo_units
 
-        result = geo_units(request=None, ano=ano, pretty=False)
+        ano_val = ano or 2024
+        result = geo_units(request=None, ano=ano_val, pretty=False)
         return _track("geo_units", result)
 
     geo_units_tool.__doc__ = (
         "Retorna unidades de saúde com latitude e longitude para o mapa."
     )
 
-    def occupancy_index_tool(ano: int = 2024, top: int = 100) -> Dict[str, Any]:
+    def occupancy_index_tool(ano: Optional[int] = None, top: Optional[int] = None) -> Dict[str, Any]:
         from backend.main import occupancy_index
 
-        result = occupancy_index(ano=ano, top=top)
+        ano_val = ano or 2024
+        top_val = top or 100
+        result = occupancy_index(ano=ano_val, top=top_val)
         return _track("occupancy_index", result)
 
     occupancy_index_tool.__doc__ = (
         "Calcula índice de estresse/ocupação por CNES no ano especificado."
     )
 
-    def wait_time_series_tool(cnes: str, ano: int = 2024) -> Dict[str, Any]:
+    def wait_time_series_tool(cnes: str, ano: Optional[int] = None) -> Dict[str, Any]:
         from backend.main import wait_time_series
 
-        result = wait_time_series(cnes=cnes, ano=ano)
+        ano_val = ano or 2024
+        result = wait_time_series(cnes=cnes, ano=ano_val)
         return _track("wait_time_series", result)
 
     wait_time_series_tool.__doc__ = (
         "Retorna série temporal de tempo de espera (lead time) para o CNES informado."
     )
 
-    def professional_load_tool(ano: int = 2024, top: int = 100) -> Dict[str, Any]:
+    def professional_load_tool(ano: Optional[int] = None, top: Optional[int] = None) -> Dict[str, Any]:
         from backend.main import professional_load
 
-        result = professional_load(ano=ano, top=top)
+        ano_val = ano or 2024
+        top_val = top or 100
+        result = professional_load(ano=ano_val, top=top_val)
         return _track("professional_load", result)
 
     professional_load_tool.__doc__ = (
         "Lista carga de profissionais ativos por CNES para o ano desejado."
     )
 
-    def supply_demand_tool(ano: int = 2024, top: int = 200) -> Dict[str, Any]:
+    def supply_demand_tool(ano: Optional[int] = None, top: Optional[int] = None) -> Dict[str, Any]:
         from backend.main import supply_demand
 
-        result = supply_demand(ano=ano, top=top)
+        ano_val = ano or 2024
+        top_val = top or 200
+        result = supply_demand(ano=ano_val, top=top_val)
         return _track("supply_demand", result)
 
     supply_demand_tool.__doc__ = (
