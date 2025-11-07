@@ -59,6 +59,9 @@ env/
 # Project data / indexes
 backend/dados/
 backend/dados_sample/
+backend/dados_csv/
+backend/supabaseAPI.py
+patch.diff
 .chroma/
 
 # Node / Next.js

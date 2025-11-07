@@ -18,3 +18,26 @@ Notebooks/
 .env
 .env.*
 frontend/.env.local
+
+**/__pycache__/
+**/*.pyc
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+**/.venv/
+**/node_modules/
+**/dist/
+**/build/
+**/.DS_Store
+
+*.log
+
+# editor
+.vscode/
+.idea/
+
+# datasets pesados opcionais (descomente se não quiser ir pro container)
+backend/dados_csv/*
+backend/dados/*
+backend/dados_csv
+backend/dados_sample

@@ -1,26 +1,28 @@
+# backend/Dockerfile
 FROM python:3.12
-
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1
+    PIP_NO_CACHE_DIR=1 \
+    PYTHONPATH=/app \
+    PORT=8000
 
 WORKDIR /app
 
-# System dependencies kept lean for psycopg2-binary and curl usage
+# System deps (mínimo necessário pra numpy/pandas e curl)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential curl && \
-    rm -rf /var/lib/apt/lists/*
+    build-essential curl \
+  && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies
-COPY requirements.txt ./requirements.txt
-RUN pip install -r requirements.txt
+# Copia somente requirements primeiro (cache de camadas!)
+COPY requirements.txt /app/requirements.txt
+RUN pip install --no-cache-dir -r /app/requirements.txt
 
-# Copy project sources
-COPY . ./backend
-
-
-ENV PYTHONPATH=/app
+# Copia o código do backend
+# Obs: como o Dockerfile está dentro da pasta "backend",
+# este COPY copia TUDO que está em "backend/" do repo → "/app/backend" na imagem
+COPY . /app/backend
 
 EXPOSE 8000
 
-CMD ["sh", "-c", "uvicorn backend.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+# Uvicorn usa $PORT do Railway automaticamente
+CMD ["sh", "-c", "uvicorn backend.main:app --host 0.0.0.0 --port ${PORT}"]

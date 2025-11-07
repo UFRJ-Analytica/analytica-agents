@@ -28,9 +28,26 @@ dados_*/
 dados_csv/
 *.parquet
 *.csv
-backend\dados_csv
-backend\dados
-backend\dados_sample
+backend/dados_csv
+backend/dados
+backend/dados_sample
 # Outros
 dist/
 build/
+
+**/__pycache__/
+**/*.pyc
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+**/.venv/
+**/node_modules/
+**/dist/
+**/build/
+**/.DS_Store
+
+*.log
+
+# editor
+.vscode/
+.idea/
