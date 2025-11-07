@@ -4,7 +4,7 @@ import asyncio
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional, Dict, Any, List
-
+import numpy as np
 import pandas as pd
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Query
@@ -63,6 +63,30 @@ _CACHE: Dict[str, pd.DataFrame] = {}
 # ===============================================================
 # 🔹 UTILITÁRIOS DE CARREGAMENTO
 # ===============================================================
+def df_safe_records(df: pd.DataFrame) -> list[dict]:
+    """
+    Converte DataFrame para lista de dicts segura para JSON:
+    - Troca inf/-inf por NaN
+    - Troca NaN por None (vira null no JSON)
+    """
+    if df is None or df.empty:
+        return []
+    safe = df.copy()
+    # sem depender de np:
+    safe.replace([float('inf'), float('-inf')], pd.NA, inplace=True)
+    safe = safe.where(pd.notna(safe), None)
+    return safe.to_dict(orient="records")
+
+def ensure_datetime(df: pd.DataFrame, col: str) -> pd.DataFrame:
+    """
+    Garante que df[col] seja datetime64[ns]; se não for, faz coerce (errors='coerce').
+    Retorna o próprio df para uso encadeado.
+    """
+    if col not in df.columns:
+        return df
+    if not pd.api.types.is_datetime64_any_dtype(df[col]):
+        df[col] = pd.to_datetime(df[col], errors="coerce")
+    return df
 
 def _load_csv(name: str) -> pd.DataFrame:
     """Carrega um CSV em cache, com tipagem e parsing de datas."""
@@ -256,6 +280,10 @@ def occupancy_index(ano: int = Query(..., ge=2000, le=2100), top: int = 100):
     mk = load_table("marcacao").copy()
     if "data_solicitacao" not in mk.columns:
         return {"ano": ano, "rows": 0, "data": []}
+
+    # garante datetime
+    mk = ensure_datetime(mk, "data_solicitacao")
+    mk = ensure_datetime(mk, "data_marcacao")
     mk = mk[mk["data_solicitacao"].notna()]
     mk = mk[mk["data_solicitacao"].dt.year == ano]
 
@@ -263,14 +291,22 @@ def occupancy_index(ano: int = Query(..., ge=2000, le=2100), top: int = 100):
     mk["executada"] = mk["executada"].fillna(0).astype("Int64")
 
     with_lead = mk[mk["data_marcacao"].notna()].copy()
-    with_lead["lead_dias"] = (with_lead["data_marcacao"].dt.date - with_lead["data_solicitacao"].dt.date).apply(lambda x: x.days)
+    with_lead["lead_dias"] = (
+        with_lead["data_marcacao"].dt.date - with_lead["data_solicitacao"].dt.date
+    ).apply(lambda x: x.days)
 
     grp_dem  = mk.groupby("unidade_solicitante_id_cnes", dropna=False).size().rename("demanda")
     grp_exec = mk.groupby("unidade_solicitante_id_cnes", dropna=False)["executada"].sum(min_count=1).rename("executadas")
     grp_lead = with_lead.groupby("unidade_solicitante_id_cnes", dropna=False)["lead_dias"].median().rename("lead_mediana_dias")
 
-    df = pd.concat([grp_dem, grp_exec, grp_lead], axis=1).reset_index().rename(columns={"unidade_solicitante_id_cnes": "cnes"})
-    df["taxa_execucao"] = (df["executadas"] / df["demanda"]).astype(float)
+    df = pd.concat([grp_dem, grp_exec, grp_lead], axis=1).reset_index().rename(
+        columns={"unidade_solicitante_id_cnes": "cnes"}
+    )
+
+    # evita divisão por zero → NaN (vira null)
+    import numpy as np
+    denom = df["demanda"].replace({0: np.nan})
+    df["taxa_execucao"] = (df["executadas"] / denom).astype(float)
 
     for col in ["lead_mediana_dias", "demanda", "taxa_execucao"]:
         m, s = df[col].mean(skipna=True), df[col].std(skipna=True)
@@ -279,14 +315,19 @@ def occupancy_index(ano: int = Query(..., ge=2000, le=2100), top: int = 100):
     df["stress_index"] = df["z_lead_mediana_dias"] + df["z_demanda"] - df["z_taxa_execucao"]
     df = df.sort_values("stress_index", ascending=False).head(top)
 
-    return {"ano": ano, "rows": int(df.shape[0]), "data": df.to_dict(orient="records")}
+    return {"ano": ano, "rows": int(df.shape[0]), "data": df_safe_records(df)}
+
 
 # -------- Série temporal de espera --------
 @app.get("/insights/wait-time-series")
 def wait_time_series(cnes: str, ano: int):
     mk = load_table("marcacao").copy()
-    if not {"unidade_solicitante_id_cnes","data_solicitacao","data_marcacao"}.issubset(mk.columns):
+    required = {"unidade_solicitante_id_cnes", "data_solicitacao", "data_marcacao"}
+    if not required.issubset(mk.columns):
         return {"cnes": cnes, "ano": ano, "data": []}
+
+    mk = ensure_datetime(mk, "data_solicitacao")
+    mk = ensure_datetime(mk, "data_marcacao")
 
     mk = mk[
         (mk["unidade_solicitante_id_cnes"].astype(str) == str(cnes)) &
@@ -297,7 +338,9 @@ def wait_time_series(cnes: str, ano: int):
     if mk.empty:
         return {"cnes": cnes, "ano": ano, "data": []}
 
-    mk["lead_dias"] = (mk["data_marcacao"].dt.date - mk["data_solicitacao"].dt.date).apply(lambda x: x.days)
+    mk["lead_dias"] = (
+        mk["data_marcacao"].dt.date - mk["data_solicitacao"].dt.date
+    ).apply(lambda x: x.days)
     mk["mes"] = mk["data_solicitacao"].dt.to_period("M").dt.to_timestamp()
 
     agg = mk.groupby("mes")["lead_dias"].agg(
@@ -306,7 +349,8 @@ def wait_time_series(cnes: str, ano: int):
         lead_p90_dias=lambda s: s.quantile(0.9)
     ).reset_index().sort_values("mes")
 
-    return {"cnes": cnes, "ano": ano, "data": agg.to_dict(orient="records")}
+    return {"cnes": cnes, "ano": ano, "data": df_safe_records(agg)}
+
 
 # -------- Carga de profissionais --------
 @app.get("/insights/professional-load")
@@ -328,29 +372,61 @@ def _detect_qty_column(df: pd.DataFrame):
 
 @app.get("/insights/supply-demand")
 def supply_demand(ano: int, top: int = 200):
+    # Demanda (solicitações)
     sol = load_table("solicitacao").copy()
     if "data_solicitacao" not in sol.columns:
         return {"ano": ano, "rows": 0, "data": [], "oferta_coluna_usada": None}
+
+    sol = ensure_datetime(sol, "data_solicitacao")
     sol = sol[sol["data_solicitacao"].notna()]
     sol = sol[sol["data_solicitacao"].dt.year == ano]
-    demand = sol.groupby("unidade_solicitante_id_cnes").size().reset_index(name="demanda").rename(columns={"unidade_solicitante_id_cnes": "cnes"})
+    demand = (
+        sol.groupby("unidade_solicitante_id_cnes")
+           .size()
+           .reset_index(name="demanda")
+           .rename(columns={"unidade_solicitante_id_cnes": "cnes"})
+    )
 
+    # Oferta (capacidade)
     ofe = load_table("oferta_programada").copy()
     ofe = ofe[ofe["ano"] == ano]
     qty_col = _detect_qty_column(ofe)
-    supply = (ofe.groupby("unidade_id_cnes")[qty_col].sum(min_count=1).reset_index(name="oferta")
-              if qty_col else
-              ofe.groupby("unidade_id_cnes").size().reset_index(name="oferta"))
+
+    if qty_col:
+        supply = (
+            ofe.groupby("unidade_id_cnes")[qty_col]
+               .sum(min_count=1)
+               .reset_index(name="oferta")
+        )
+    else:
+        supply = (
+            ofe.groupby("unidade_id_cnes")
+               .size()
+               .reset_index(name="oferta")
+        )
     supply = supply.rename(columns={"unidade_id_cnes": "cnes"})
 
+    # Join
+    import numpy as np
     df = pd.merge(demand, supply, on="cnes", how="outer")
-    df["demanda_sobre_oferta"] = df["demanda"] / df["oferta"]
+
+    denom = pd.to_numeric(df["oferta"], errors="coerce")
+    denom = denom.where(denom > 0, np.nan)  # evita /0
+    df["demanda_sobre_oferta"] = df["demanda"] / denom
+
     df = df.sort_values("demanda_sobre_oferta", ascending=False, na_position="last").head(top)
 
-    return {"ano": ano, "rows": int(df.shape[0]), "data": df.to_dict(orient="records"), "oferta_coluna_usada": qty_col or "COUNT(*)"}
+    return {
+        "ano": ano,
+        "rows": int(df.shape[0]),
+        "data": df_safe_records(df),
+        "oferta_coluna_usada": qty_col or "COUNT(*)"
+    }
+
 
 @app.get("/debug/columns")
 def debug_columns(table: str):
     df = load_table(table)
     sample = df.head(3).to_dict(orient="records")
     return {"table": table, "columns": df.columns.tolist(), "sample": sample}
+

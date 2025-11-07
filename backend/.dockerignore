@@ -24,9 +24,13 @@ railway.schema.json
 # Dados pesados
 dados/
 dados_sample/
+dados_*/
+dados_csv/
 *.parquet
 *.csv
-
+backend\dados_csv
+backend\dados
+backend\dados_sample
 # Outros
 dist/
 build/
