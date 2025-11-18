@@ -15,13 +15,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   && rm -rf /var/lib/apt/lists/*
 
 # Copia somente requirements primeiro (cache de camadas!)
-COPY backend/requirements.txt /app/requirements.txt
+COPY requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r /app/requirements.txt
 
 # Copia o código do backend
-# Obs: como o Dockerfile está dentro da pasta "backend",
-# este COPY copia TUDO que está em "backend/" do repo → "/app/backend" na imagem
-COPY backend /app/backend
+# Obs: como o Dockerfile é construído a partir da pasta "backend",
+# este COPY envia todo o conteúdo atual para "/app/backend" na imagem
+COPY . /app/backend
 
 EXPOSE 8000
 

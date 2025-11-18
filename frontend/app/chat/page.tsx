@@ -1,34 +1,46 @@
 "use client"
-import { useState } from 'react'
+
+import { useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import Alert from '@mui/material/Alert'
 import Chip from '@mui/material/Chip'
 import Stack from '@mui/material/Stack'
 import Typography from '@mui/material/Typography'
 import Button from '../../src/components/atoms/Button'
 import ChatPanel from '../../src/components/organisms/ChatPanel'
+import { useAuth } from '../../src/components/providers/AuthProvider'
 
 export default function ChatPage() {
-  const [token, setToken] = useState<string | null>(null)
-  const [tokenLoading, setTokenLoading] = useState(false)
-  const [tokenError, setTokenError] = useState<string | null>(null)
+  const { session, loading, token, tokenLoading, tokenError, refreshToken } = useAuth()
+  const router = useRouter()
 
-  const handleGenerateToken = async () => {
-    setTokenLoading(true)
-    setTokenError(null)
-    try {
-      const res = await fetch('/api/token', { method: 'POST' })
-      if (!res.ok) {
-        throw new Error(`Erro ${res.status}`)
-      }
-      const data = await res.json()
-      setToken(data.access_token)
-    } catch (err) {
-      console.error(err)
-      setToken(null)
-      setTokenError('Não foi possível gerar um token agora. Tente novamente em instantes.')
-    } finally {
-      setTokenLoading(false)
+  useEffect(() => {
+    if (!loading && !session) {
+      router.replace('/?auth=signin')
     }
+  }, [loading, session, router])
+
+  if (loading) {
+    return (
+      <Stack spacing={2} minHeight="70vh" alignItems="center" justifyContent="center">
+        <Typography variant="body1" color="text.secondary">
+          Verificando credenciais...
+        </Typography>
+      </Stack>
+    )
+  }
+
+  if (!session) {
+    return (
+      <Stack spacing={2} minHeight="70vh" alignItems="center" justifyContent="center">
+        <Typography variant="body1" color="text.secondary">
+          Redirecionando para a tela de acesso.
+        </Typography>
+        <Button onClick={() => router.replace('/?auth=signin')}>
+          Ir para a landing
+        </Button>
+      </Stack>
+    )
   }
 
   return (
@@ -42,21 +54,17 @@ export default function ChatPage() {
           resultados das ferramentas utilizadas durante a conversa.
         </Typography>
         {token && (
-          <Chip
-            color="success"
-            label="Token pronto"
-            sx={{ alignSelf: { xs: 'flex-start', sm: 'flex-start' } }}
-          />
+          <Chip color="success" label="Token pronto" sx={{ alignSelf: { xs: 'flex-start', sm: 'flex-start' } }} />
         )}
       </Stack>
 
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ xs: 'flex-start', sm: 'center' }}>
-        <Button onClick={handleGenerateToken} isLoading={tokenLoading} sx={{ minWidth: 180 }}>
-          Obter Token
+        <Button onClick={refreshToken} isLoading={tokenLoading} sx={{ minWidth: 180 }}>
+          Gerar novo token
         </Button>
         {!token && !tokenError && (
           <Typography variant="body2" color="text.secondary">
-            Gere um token antes de perguntar para ativar todas as capacidades da Susana IA.
+            O token e criado automaticamente apos o login. Caso precise, gere novamente.
           </Typography>
         )}
       </Stack>
