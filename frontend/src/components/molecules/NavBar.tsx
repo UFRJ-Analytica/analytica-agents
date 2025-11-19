@@ -8,6 +8,7 @@ import Button from '../atoms/Button'
 const LINKS = [
   { href: '/', label: 'Início' },
   { href: '/map', label: 'Mapa' },
+  { href: '/cloropleth', label: 'DataSus Rio' },
   { href: '/chat', label: 'Susana IA' },
 ]
 
