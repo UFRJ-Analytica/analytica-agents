@@ -72,6 +72,7 @@ const RIO_GEOJSON_SOURCE =
   process.env.NEXT_PUBLIC_RIO_GEOJSON_URL ?? 'https://raw.githubusercontent.com/tbrugz/geodata-br/master/geojson/geojs-33-mun.json'
 const TILE_URL = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
 const DEFAULT_STATE_BOUNDS: LatLngBoundsExpression = [[-24.5, -44.9], [-20.5, -40.5]]
+const STATE_LOCK_BOUNDS: LatLngBoundsExpression = [[-25, -45.6], [-20, -39.8]]
 
 const AREA_PLANNING_LABELS: Record<number, string> = {
   1: 'AP-1 Centro',
@@ -337,7 +338,16 @@ export default function CloroplethPage() {
 
       <Paper elevation={0} sx={{ borderRadius: 4, border: '1px solid', borderColor: 'divider', overflow: 'hidden' }}>
         <Box sx={{ position: 'relative', height: { xs: 520, md: 640 } }}>
-          <MapContainer key={mapKey} bounds={bounds} style={{ height: '100%', width: '100%' }}>
+          <MapContainer
+            key={mapKey}
+            bounds={bounds}
+            maxBounds={STATE_LOCK_BOUNDS}
+            maxBoundsViscosity={1.0}
+            minZoom={7}
+            maxZoom={15}
+            zoomControl
+            style={{ height: '100%', width: '100%', backgroundColor: '#eef2ff' }}
+          >
             <TileLayer url={TILE_URL} attribution="&copy; OpenStreetMap contributors" />
             {mapLevel === 'municipios' && municipalities?.features.length ? (
               <GeoJSONLayer data={municipalities as unknown as GeoJsonObject} style={municipalityStyle} onEachFeature={onEachMunicipality} />
