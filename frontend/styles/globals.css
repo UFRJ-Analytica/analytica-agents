@@ -1,17 +1,24 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 :root {
   color-scheme: light;
 }
-html, body {
+
+html,
+body {
   padding: 0;
   margin: 0;
   min-height: 100%;
 }
+
 body {
-  font-family: 'Roboto', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
-  background: transparent;
-  color: #111;
+  font-family: 'Inter', 'Roboto', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  background-color: #f8fafc;
+  color: #0f172a;
 }
+
 * {
   box-sizing: border-box;
 }
-
