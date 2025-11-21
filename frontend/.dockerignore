@@ -1,0 +1,42 @@
+# Ignore dependencies and caches
+node_modules
+.npm
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Build output
+.next
+out
+dist
+build
+.turbo
+.vercel
+.cache
+coverage
+reports
+tmp
+temp
+
+# Env and config secrets
+.env
+.env.*
+!.env.example
+
+# Editor/OS noise
+.DS_Store
+Thumbs.db
+.idea
+.vscode
+*.swp
+*.swo
+
+# VCS
+.git
+.gitignore
+
+# Misc
+*.tgz
+*.pem
+*.key
