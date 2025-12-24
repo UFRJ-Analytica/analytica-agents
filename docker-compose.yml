@@ -20,16 +20,22 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - ./backend:/app
+      - ./backend:/app/backend
     env_file:
       - ./.env
     depends_on: []
   
   frontend:
-    build: ./frontend
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+        NEXT_PUBLIC_BACKEND_URL: ${NEXT_PUBLIC_BACKEND_URL}
     container_name: analytica-frontend
+    env_file:
+      - ./.env
+      - ./frontend/.env.local
     ports:
       - "3000:3000"
-    volumes:
-      - ./frontend:/app
     command: ["npm", "start"]

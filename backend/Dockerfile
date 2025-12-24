@@ -31,11 +31,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # PRODUCAO RAILWAY
 
 # Copia somente requirements primeiro (cache de camadas!)
-COPY backend/requirements.txt /app/requirements.txt
+COPY requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r /app/requirements.txt
 
-# Copia o código do backend
-COPY backend /app/backend
+# Copia o código do backend (o build context é a pasta backend/)
+COPY . /app/backend
 
 
 EXPOSE 8000
