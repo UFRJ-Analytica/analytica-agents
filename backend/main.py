@@ -24,6 +24,7 @@ from google.genai.types import Content, Part
 from backend.NL2SQL_Agent.agent import root_agent
 from backend.susana.config import JWT_SECRET, JWT_ALG
 from backend.susana.router import router as susana_router
+from backend.endpoints.extended_insights import router as extended_insights_router
 
 FN = {
     "marcacao": "marcacao.csv",
@@ -194,6 +195,7 @@ def issue_token(payload: TokenRequest) -> TokenResponse:
     return TokenResponse(access_token=token)
 
 app.include_router(susana_router)
+app.include_router(extended_insights_router)
 
 
 def maybe_pretty(payload, pretty: bool):
@@ -216,6 +218,10 @@ def home():
             "/insights/wait-time-series?cnes=2269554&ano=2024",
             "/insights/professional-load?ano=2024",
             "/insights/supply-demand?ano=2024",
+            "/insights/top-procedures?ano=2024&top=20",
+            "/insights/unit-dashboard?cnes=2269554&ano=2024",
+            "/specialties/overview?dataset=oftalmologia&ano=2024",
+            "/meta/data-coverage",
             "/schema",
         ]
     }
@@ -389,22 +395,45 @@ def supply_demand(ano: int, top: int = 200):
 
     # Oferta (capacidade)
     ofe = load_table("oferta_programada").copy()
-    ofe = ofe[ofe["ano"] == ano]
+    if "ano" in ofe.columns:
+        ofe_ano = pd.to_numeric(ofe["ano"], errors="coerce")
+        ofe = ofe[ofe_ano.between(2000, 2100)]
+        ofe = ofe[ofe_ano == ano]
+
+    cnes_col = None
+    for c in ["unidade_id_cnes", "unidade_solicitante_id_cnes", "unidade_solicitante"]:
+        if c in ofe.columns:
+            cnes_col = c
+            break
+    if cnes_col is None:
+        return {
+            "ano": ano,
+            "rows": 0,
+            "data": [],
+            "oferta_coluna_usada": None,
+            "detail": "Coluna CNES da oferta não encontrada",
+        }
+
+    ofe["cnes"] = (
+        ofe[cnes_col]
+        .astype(str)
+        .str.strip()
+        .str.replace(r"\.0$", "", regex=True)
+    )
     qty_col = _detect_qty_column(ofe)
 
     if qty_col:
         supply = (
-            ofe.groupby("unidade_id_cnes")[qty_col]
+            ofe.groupby("cnes")[qty_col]
                .sum(min_count=1)
                .reset_index(name="oferta")
         )
     else:
         supply = (
-            ofe.groupby("unidade_id_cnes")
+            ofe.groupby("cnes")
                .size()
                .reset_index(name="oferta")
         )
-    supply = supply.rename(columns={"unidade_id_cnes": "cnes"})
 
     # Join
     import numpy as np
@@ -429,4 +458,3 @@ def debug_columns(table: str):
     df = load_table(table)
     sample = df.head(3).to_dict(orient="records")
     return {"table": table, "columns": df.columns.tolist(), "sample": sample}
-

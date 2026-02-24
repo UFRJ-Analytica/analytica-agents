@@ -2,7 +2,7 @@
 import io
 import os
 from functools import lru_cache
-from typing import Optional, Sequence
+from typing import Optional, Sequence, Union
 
 from urllib.parse import quote, urlparse, urlunparse
 
@@ -39,18 +39,27 @@ def _get_supabase_client():
     return _SB_CLIENT
 
 
-FILEMAP = {
+FILEMAP: dict[str, Union[str, tuple[str, ...]]] = {
     "marcacao": "marcacao",
     "solicitacao": "solicitacao",
     "tempo_espera": "tempo_espera",
     "profissional_historico": "profissional_historico",
     "unidade_historico": "unidade_historico",
     "oferta_programada": "oferta_programada",
-    "cid": "cids",
+    "cid": ("cid", "cids"),
     "procedimento": "procedimento",
     "equipamento_historico": "equipamento_historico",
     "leito_historico": "leito_historico",
     "habilitacao_historico": "habilitacao_historico",
+    "consulta_oftalmologia": "consulta_oftalmologia",
+    "consulta_otalmologia_geral": "consulta_otalmologia_geral",
+    "consulta_em_oftalmologia_nomes_das_unidades": "consulta_em_oftalmologia_nomes_das_unidades",
+    "consultas_fisioterapia": "consultas_fisioterapia",
+    "consultas_fisioterapia_nome_das_unidades": "consultas_fisioterapia_nome_das_unidades",
+    "consulta_fisioterapia_com_unidades": "consulta_fisioterapia_com_unidades",
+    "consulta_em_saude_mental_adulto": "consulta_em_saude_mental_adulto",
+    "consulta_em_saude_mental_nome_das_unidades": "consulta_em_saude_mental_nome_das_unidades",
+    "cirurgia_de_catarata": "cirurgia_de_catarata",
 }
 
 
@@ -70,8 +79,14 @@ def _encode_uri_path(uri: str) -> str:
         return uri.replace(' ', '%20')
 
 
-def _make_path(name: str, fmt: str) -> str:
+def _base_names(name: str) -> tuple[str, ...]:
     base = FILEMAP[name]
+    if isinstance(base, tuple):
+        return base
+    return (base,)
+
+
+def _make_path(base: str, fmt: str) -> str:
     ext = ".parquet" if fmt == "parquet" else ".csv"
     if DATA_BACKEND in {"s3", "supabase"}:
         base_uri = DATA_URI.rstrip('/')
@@ -135,35 +150,42 @@ def _read_frame_from_path(path: str, fmt: str, dtypes=None, parse_dates=None) ->
 
 @lru_cache(maxsize=32)
 def load_table(name: str, dtypes=None, parse_dates=None) -> pd.DataFrame:
+    if name not in FILEMAP:
+        raise RuntimeError(
+            f"Tabela '{name}' nao mapeada em FILEMAP. Opcoes: {sorted(FILEMAP.keys())}"
+        )
+
     last_error: Optional[Exception] = None
     for fmt in _candidate_formats():
-        try:
-            if DATA_BACKEND == "supabase":
-                blob = _read_supabase_api(FILEMAP[name], fmt)
-                if blob is None:
-                    path = _make_path(name, fmt)
-                    blob = _read_supabase(path)
-                return _read_frame_from_blob(blob, fmt, dtypes=dtypes, parse_dates=parse_dates)
+        for base in _base_names(name):
+            try:
+                if DATA_BACKEND == "supabase":
+                    blob = _read_supabase_api(base, fmt)
+                    if blob is None:
+                        path = _make_path(base, fmt)
+                        blob = _read_supabase(path)
+                    return _read_frame_from_blob(blob, fmt, dtypes=dtypes, parse_dates=parse_dates)
 
-            path = _make_path(name, fmt)
-            return _read_frame_from_path(path, fmt, dtypes=dtypes, parse_dates=parse_dates)
-        except FileNotFoundError as err:
-            last_error = err
-            if DATA_FORMAT != "auto":
-                break
-        except requests.HTTPError as err:
-            last_error = err
-            if DATA_FORMAT != "auto":
-                break
-        except ImportError as err:
-            raise RuntimeError(
-                "Parquet engine ausente. Instale as dependencias necesarias, por exemplo `pip install pyarrow s3fs`."
-            ) from err
-        except Exception as err:
-            last_error = err
-            if DATA_FORMAT != "auto":
-                break
+                path = _make_path(base, fmt)
+                return _read_frame_from_path(path, fmt, dtypes=dtypes, parse_dates=parse_dates)
+            except FileNotFoundError as err:
+                last_error = err
+                continue
+            except requests.HTTPError as err:
+                last_error = err
+                continue
+            except ImportError as err:
+                raise RuntimeError(
+                    "Parquet engine ausente. Instale as dependencias necesarias, por exemplo `pip install pyarrow s3fs`."
+                ) from err
+            except Exception as err:
+                last_error = err
+                if DATA_FORMAT != "auto":
+                    break
+
+        if DATA_FORMAT != "auto":
+            break
 
     raise RuntimeError(
-        f"Nao foi possivel carregar '{name}' usando os formatos candidatos {_candidate_formats()}. Ultimo erro: {last_error}"
+        f"Nao foi possivel carregar '{name}' usando os formatos candidatos {_candidate_formats()} e bases {_base_names(name)}. Ultimo erro: {last_error}"
     ) from last_error
